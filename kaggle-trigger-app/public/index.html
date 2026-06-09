@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Kokoro Video Automation Control Center</title>
+  <meta name="description" content="Configure video settings, upload scripts, and trigger background Kaggle notebook video rendering pipelines in one click.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="app-container">
+    <header class="app-header">
+      <div class="logo">
+        <span class="icon">🎬</span>
+        <h1>Kokoro Video Automation</h1>
+      </div>
+      <p class="tagline">Hugging Face Space Control Center • Kaggle T4 Pipeline Trigger</p>
+    </header>
+
+    <main class="app-grid">
+      <!-- Left Column: Setup & Inputs -->
+      <section class="control-panel">
+        
+        <!-- Section 1: Kaggle Credentials Setup -->
+        <div class="card glass-card" id="creds-card">
+          <div class="card-header">
+            <span class="badge">1</span>
+            <h2>Kaggle & API Authentication</h2>
+          </div>
+          <div class="card-body">
+            <div class="helper-text">
+              <p><strong>How to get your Kaggle API key:</strong></p>
+              <ol>
+                <li>Go to <a href="https://www.kaggle.com" target="_blank" rel="noopener">Kaggle.com</a> and log in.</li>
+                <li>Go to your profile (top right) -> <strong>Settings</strong>.</li>
+                <li>Scroll to the <strong>API</strong> section and click <strong>Create New Token</strong>.</li>
+                <li>Open the downloaded <code>kaggle.json</code> to find your username and key.</li>
+              </ol>
+            </div>
+            
+            <div class="input-group">
+              <label for="kaggle-username">Kaggle Username</label>
+              <input type="text" id="kaggle-username" placeholder="e.g., ikechukwuebiringa1">
+            </div>
+            
+            <div class="input-group">
+              <label for="kaggle-key">Kaggle API Key</label>
+              <input type="password" id="kaggle-key" placeholder="Paste your Kaggle API Key / Token here">
+            </div>
+
+            <div class="input-group">
+              <label for="hf-token">HuggingFace Token Override (Optional)</label>
+              <input type="password" id="hf-token" placeholder="hf_... (Defaults to pre-configured token)">
+            </div>
+
+            <div class="input-group">
+              <label for="backend-url">Backend API URL (Optional)</label>
+              <input type="text" id="backend-url" placeholder="e.g., https://username-space-name.hf.space (Default: same host)">
+            </div>
+            
+            <button class="btn secondary-btn" id="save-creds-btn">Save Authentications</button>
+            <div class="success-message" id="creds-saved-msg">✓ Credentials saved locally in your browser!</div>
+          </div>
+        </div>
+
+        <!-- Section 2: CSV Upload -->
+        <div class="card glass-card">
+          <div class="card-header">
+            <span class="badge">2</span>
+            <h2>Upload Script CSV</h2>
+          </div>
+          <div class="card-body">
+            <div class="upload-zone" id="drop-zone">
+              <input type="file" id="csv-file-input" accept=".csv" style="display: none;">
+              <div class="upload-icon">📄</div>
+              <p class="upload-title">Drag & Drop your True Crime CSV here</p>
+              <p class="upload-subtitle">or click to browse from files</p>
+              <div class="file-details" id="selected-file-details" style="display: none;">
+                <span class="file-name" id="selected-file-name">file.csv</span>
+                <span class="file-size" id="selected-file-size">0 KB</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Section 3: Video Settings -->
+        <div class="card glass-card">
+          <div class="card-header">
+            <span class="badge">3</span>
+            <h2>Configuration Parameters</h2>
+          </div>
+          <div class="card-body">
+            <div class="input-grid">
+              <div class="input-group">
+                <label for="aspect-ratio">Aspect Ratio</label>
+                <select id="aspect-ratio">
+                  <option value="16:9">Horizontal (16:9)</option>
+                  <option value="9:16">Vertical / Shorts (9:16)</option>
+                </select>
+              </div>
+
+              <div class="input-group">
+                <label for="kokoro-voice">Voice Model</label>
+                <select id="kokoro-voice">
+                  <option value="am_michael">am_michael (Energetic male - Default)</option>
+                  <option value="am_echo">am_echo (Vibrant male)</option>
+                  <option value="am_onyx">am_onyx (Vibrant male)</option>
+                  <option value="af_heart">af_heart (Vibrant female)</option>
+                  <option value="af_nova">af_nova (Expressive female)</option>
+                  <option value="af_sky">af_sky (Vibrant female)</option>
+                  <option value="af_bella">af_bella (Vibrant female)</option>
+                </select>
+              </div>
+
+              <div class="input-group">
+                <label for="video-speed">Video Speed (Multiplier)</label>
+                <div class="range-display">
+                  <input type="range" id="video-speed" min="0.5" max="2.0" step="0.05" value="1.1">
+                  <span class="val-lbl" id="speed-val">1.1x</span>
+                </div>
+              </div>
+
+              <div class="input-group checkbox-group">
+                <input type="checkbox" id="caption-enabled" checked>
+                <label for="caption-enabled">Burn Video Captions</label>
+              </div>
+            </div>
+
+            <!-- Advanced caption options (toggle-able or just visible) -->
+            <div class="advanced-settings-header" id="adv-toggle">
+              <span>Advanced Caption Options</span>
+              <span class="arrow">▼</span>
+            </div>
+            
+            <div class="advanced-settings-body" id="adv-body" style="display: none;">
+              <div class="input-grid">
+                <div class="input-group">
+                  <label for="caption-font-size">Font Size (px)</label>
+                  <input type="number" id="caption-font-size" value="22" min="10" max="150">
+                </div>
+
+                <div class="input-group">
+                  <label for="caption-color">Caption Color</label>
+                  <div class="color-picker-wrapper">
+                    <input type="color" id="caption-color-picker" value="#ffffff">
+                    <input type="text" id="caption-color-text" value="white">
+                  </div>
+                </div>
+
+                <div class="input-group">
+                  <label for="caption-outline">Outline Width (px)</label>
+                  <input type="number" id="caption-outline" value="4" min="0" max="20">
+                </div>
+
+                <div class="input-group">
+                  <label for="caption-y-pos">Vertical Position (Y-ratio)</label>
+                  <div class="range-display">
+                    <input type="range" id="caption-y-pos" min="0.0" max="1.0" step="0.05" value="0.80">
+                    <span class="val-lbl" id="y-pos-val">0.80</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <button class="btn primary-btn" id="trigger-pipeline-btn">
+              <span class="btn-text">Generate Video on Kaggle</span>
+              <span class="spinner" style="display: none;"></span>
+            </button>
+          </div>
+        </div>
+
+      </section>
+
+      <!-- Right Column: Status & Output -->
+      <section class="status-panel">
+        
+        <!-- Real-Time Progress -->
+        <div class="card glass-card status-card">
+          <div class="card-header">
+            <h2>Pipeline Execution Monitor</h2>
+            <div class="status-indicator" id="status-indicator">
+              <span class="dot"></span>
+              <span class="status-text">Idle</span>
+            </div>
+          </div>
+          
+          <div class="card-body status-body">
+            <div class="progress-bar-container" style="display: none;" id="progress-container">
+              <div class="progress-info">
+                <span id="progress-stage">Queuing run on Kaggle GPU...</span>
+                <span id="elapsed-time">0s</span>
+              </div>
+              <div class="progress-bar-track">
+                <div class="progress-bar-fill" id="progress-fill"></div>
+              </div>
+            </div>
+
+            <div class="console-log-wrapper">
+              <div class="console-header">
+                <span>Active Execution Logs</span>
+                <button class="btn-clear" id="clear-logs">Clear</button>
+              </div>
+              <div class="console-log" id="console-output">
+                <div class="log-line system">[SYSTEM] Ready. Upload script and trigger video.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Output Video Card -->
+        <div class="card glass-card output-card" id="output-card" style="display: none;">
+          <div class="card-header">
+            <h2>Your Rendered Video</h2>
+          </div>
+          <div class="card-body output-body">
+            <div class="success-banner">
+              <span class="party-icon">🎉</span>
+              <div>
+                <h3>Generation Completed Successfully!</h3>
+                <p>The Kaggle T4 GPU has finished compiling your video assets.</p>
+              </div>
+            </div>
+            
+            <div class="video-preview-wrapper" id="video-preview-container">
+              <!-- Video gets injected here -->
+            </div>
+
+            <div class="output-actions">
+              <a href="#" class="btn primary-btn download-btn" id="download-video-btn" download>
+                <span>Download Video File (MP4)</span>
+              </a>
+              <button class="btn secondary-btn copy-btn" id="copy-link-btn">
+                <span class="copy-icon">🔗</span>
+                <span id="copy-btn-text">Copy Download Link</span>
+              </button>
+            </div>
+            <div class="success-message" id="link-copied-msg">✓ Link copied to clipboard!</div>
+          </div>
+        </div>
+
+      </main>
+    </div>
+  </div>
+
+  <footer class="app-footer">
+    <p>Powered by Hugging Face Docker Spaces & Kaggle API • Designed for high-speed storytelling channels</p>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>
