@@ -1,3 +1,12 @@
+---
+name: truecrimescript
+description: "Use this skill whenever the user asks to generate a true crime YouTube video script as a CSV file. This skill covers the full pipeline: researching a real story, structuring it for maximum YouTube retention, writing Flux-optimized image prompts, and outputting a correctly formatted CSV — then saving it to Google Drive."
+license: MIT
+metadata:
+  author: Airpyk-98
+  version: "1.0.0"
+---
+
 # truecrimescript.md
 
 ## Skill: True Crime YouTube CSV Script Generator
@@ -132,17 +141,18 @@ Serial number, image prompt, video prompt, voice over prompt
 
 ---
 
-## Step 4 — Tone and Style Reference
+## Step 4 — Tone and Style Reference (Ray William Johnson Narration Style)
 
-Model the tone after top-performing UK/US true crime YouTube channels that achieved monetization within 2–3 months. Key style rules:
+Model the tone and narration style after content creator Ray William Johnson's true crime and cultural storytelling videos. The script must sound conversational, highly engaging, fast-paced, and punchy. Key style rules:
 
-- **Simple words, maximum impact** — never use complex vocabulary when a plain word hits harder
-- **Short declarative sentences** — state facts as if they are the most shocking things ever said
-- **Controlled outrage** — the narrator is affected but composed
-- **Dark humour moments** — used sparingly at absurd/ironic plot points only, never directed at victims
-- **Respect for victims always** — every script must end with a tribute that honours the victims by name
-- **Villain framing** — perpetrators are described through their actions, not psychology jargon
-- **Cliffhangers at re-hook points** — the viewer must feel they cannot stop watching
+- **Conversational & Direct Audience Address**: Write as if telling a crazy story to a friend. Start sentences or lines with conversational transitions (e.g., "So imagine this...", "Now, you'd think...", "Yeah... it's exactly what it sounds like.").
+- **High-Energy Hook-First Structure**: Grab attention immediately on the first line. Frame the situation as shocking or unbelievable (e.g., "This teenager did the absolute unthinkable just to get a new phone," "Meet [Name]. He thought he was the smartest person in the room. Spoiler alert: he wasn't.").
+- **Dramatic "...UNTIL..." Transitions**: Build up suspenseful setups and mark twists with bold, capitalized transitions like "...UNTILLLLL...", "...but then, things took a turn...", "...and that's when things get weird."
+- **Sarcastic Rhetorical Commentary**: Interject with dry humor, sarcasm, or disbelief at the criminals' stupidity or the absurdity of their actions (e.g., "Like, honestly, who does that?", "Brilliant plan, right?", "It's almost impressive how much they wanted to get caught.").
+- **Simple, Punchy, Fast-Paced Language**: Use simple words for maximum impact. Keep sentences short and declarative. Avoid dry, formal, or academic documentary-style reporting.
+- **Respect for victims always**: While perpetrator actions are mocked or treated with dry sarcasm, the tone must always remain respectful to victims. Every script must end with a tribute that honours the victims by name.
+- **The "Moral of the Story" Closing**: Conclude the script with a cynical, comedic, or punchy moral lesson (e.g., "Moral of the story: Just get a job," "Moral of the story: Don't write a book detailing your crimes.").
+- **Audience Engagement Outro**: End the video by directly asking the audience a binary or highly engaging question to drive comments (e.g., "What do you think? Did the punishment fit the crime, or should they have got more? Let me know in the comments.").
 
 ---
 
@@ -186,7 +196,7 @@ Before delivering any CSV, verify:
 
 ```csv
 Serial number,image prompt,video prompt,voice over prompt
-1,"Hyper realistic close-up of a cracked smartphone screen displaying a BBC News breaking notification in bold white text on dark background, blurred busy London commuter street visible behind, cold morning light, fingerprints on glass, notification badge glowing red, subtle lens flare, shallow depth of field, photorealistic, 8K ultra detail, cinematic documentary style. Negative prompt: cartoon, anime, illustration, CGI, blurry notification text, watermark, extra phones in frame, wrong platform logo, pixelated",Slow dramatic zoom,"He was one of the most hated men in British history."
+1,"Hyper realistic close-up of a cracked smartphone screen displaying a BBC News breaking notification in bold white text on dark background, blurred busy London commuter street visible behind, cold morning light, fingerprints on glass, notification badge glowing red, subtle lens flare, shallow depth of field, photorealistic, 8K ultra detail, cinematic documentary style. Negative prompt: cartoon, anime, illustration, CGI, blurry notification text, watermark, extra phones in frame, wrong platform logo, pixelated",Slow dramatic zoom,"So imagine this: you think you've committed the perfect crime, right? Well, meet [Name] — a guy who thought he was smarter than everyone."
 ```
 
 ---
