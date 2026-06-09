@@ -308,6 +308,12 @@ app.post('/api/trigger', upload.single('csvFile'), async (req, res) => {
     cellText = cellText.replace(/HF_TOKEN_OVERRIDE\s*=\s*['"][^'"]*['"]/, `HF_TOKEN_OVERRIDE = "${hf_token_override || ''}"`);
     cellText = cellText.replace(/CSV_DATA_URL\s*=\s*['"][^'"]*['"]/, `CSV_DATA_URL   = "input_data.csv"`);
 
+    // Dynamic bypass for Pandas storage_options error on local file read
+    cellText = cellText.replace(
+      'df = pd.read_csv(CSV_DATA_URL, storage_options={"User-Agent": "Mozilla/5.0"})',
+      'df = pd.read_csv(CSV_DATA_URL) if not CSV_DATA_URL.startswith("http") else pd.read_csv(CSV_DATA_URL, storage_options={"User-Agent": "Mozilla/5.0"})'
+    );
+
     notebookData.cells[configCellIndex].source = cellText.match(/[^\n]*\n|[^\n]+/g) || [];
 
     // Write modified notebook
