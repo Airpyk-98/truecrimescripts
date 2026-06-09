@@ -294,37 +294,21 @@ app.post('/api/trigger', upload.single('csvFile'), async (req, res) => {
       throw new Error('Could not find the USER CONFIGURATION cell in the notebook.');
     }
 
-    // Build the new config lines
-    const configSource = [
-      "# ============================================================\n",
-      "#  USER CONFIGURATION  ← modified by Web Trigger\n",
-      "# ============================================================\n",
-      `ASPECT_RATIO   = "${aspect_ratio || '16:9'}"        # "16:9" or "9:16"\n`,
-      "BGM_URL        = \"https://docs.google.com/uc?export=download&id=1OkWbdEFlh3N4kcl7zazUj_N0X9VzB6IP\"\n",
-      "CSV_DATA_URL   = \"input_data.csv\"                   # Read locally injected file\n",
-      "\n",
-      "# ── Voice ────────────────────────────────────────────────────\n",
-      `KOKORO_VOICE   = "${kokoro_voice || 'am_michael'}"\n`,
-      "\n",
-      "# ── Captions ────────────────────────────────────────────────\n",
-      `CAPTION_ENABLED   = ${caption_enabled === 'true' ? 'True' : 'False'}\n`,
-      `CAPTION_FONT_SIZE = ${parseInt(caption_font_size) || 22}\n`,
-      `CAPTION_COLOR     = "${caption_color || 'white'}"\n`,
-      `CAPTION_OUTLINE   = ${parseInt(caption_outline) || 4}\n`,
-      `CAPTION_Y_POS     = ${parseFloat(caption_y_pos) || 0.80}\n`,
-      "\n",
-      "# ── Speed ────────────────────────────────────────────────────\n",
-      `VIDEO_SPEED    = ${parseFloat(video_speed) || 1.1}\n`,
-      "\n",
-      "# ── Output ──────────────────────────────────────────────────\n",
-      "FPS            = 24\n",
-      "\n",
-      "# ── HuggingFace Token ────────────────────────────────────────\n",
-      `HF_TOKEN_OVERRIDE = "${hf_token_override || ''}"\n`,
-      "# ============================================================\n"
-    ];
+    // Perform dynamic replacement inside the original USER CONFIGURATION cell to preserve all original functions
+    let cellText = notebookData.cells[configCellIndex].source.join("");
 
-    notebookData.cells[configCellIndex].source = configSource;
+    cellText = cellText.replace(/ASPECT_RATIO\s*=\s*['"][^'"]*['"]/, `ASPECT_RATIO   = "${aspect_ratio || '16:9'}"`);
+    cellText = cellText.replace(/KOKORO_VOICE\s*=\s*['"][^'"]*['"]/, `KOKORO_VOICE   = "${kokoro_voice || 'am_michael'}"`);
+    cellText = cellText.replace(/CAPTION_ENABLED\s*=\s*(True|False)/i, `CAPTION_ENABLED   = ${caption_enabled === 'true' ? 'True' : 'False'}`);
+    cellText = cellText.replace(/CAPTION_FONT_SIZE\s*=\s*\d+/, `CAPTION_FONT_SIZE = ${parseInt(caption_font_size) || 22}`);
+    cellText = cellText.replace(/CAPTION_COLOR\s*=\s*['"][^'"]*['"]/, `CAPTION_COLOR     = "${caption_color || 'white'}"`);
+    cellText = cellText.replace(/CAPTION_OUTLINE\s*=\s*\d+/, `CAPTION_OUTLINE   = ${parseInt(caption_outline) || 4}`);
+    cellText = cellText.replace(/CAPTION_Y_POS\s*=\s*[0-9.]+/, `CAPTION_Y_POS     = ${parseFloat(caption_y_pos) || 0.80}`);
+    cellText = cellText.replace(/VIDEO_SPEED\s*=\s*[0-9.]+/, `VIDEO_SPEED    = ${parseFloat(video_speed) || 1.1}`);
+    cellText = cellText.replace(/HF_TOKEN_OVERRIDE\s*=\s*['"][^'"]*['"]/, `HF_TOKEN_OVERRIDE = "${hf_token_override || ''}"`);
+    cellText = cellText.replace(/CSV_DATA_URL\s*=\s*['"][^'"]*['"]/, `CSV_DATA_URL   = "input_data.csv"`);
+
+    notebookData.cells[configCellIndex].source = cellText.match(/[^\n]*\n|[^\n]+/g) || [];
 
     // Write modified notebook
     const notebookFilename = 'kokoro-tts-automation.ipynb';
