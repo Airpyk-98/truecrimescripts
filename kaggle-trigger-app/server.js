@@ -117,9 +117,15 @@ app.post('/api/test-kaggle', async (req, res) => {
       key: finalKey
     }, null, 2), 'utf8');
 
+    // Support new KGAT token format
+    if (finalKey.startsWith('KGAT_')) {
+      fs.writeFileSync(path.join(tempDir, 'access_token'), finalKey.trim(), 'utf8');
+    }
+
     const env = {
       KAGGLE_USERNAME: finalUsername,
       KAGGLE_KEY: finalKey,
+      KAGGLE_API_TOKEN: finalKey,
       KAGGLE_CONFIG_DIR: tempDir
     };
 
@@ -202,8 +208,17 @@ app.post('/api/trigger', upload.single('csvFile'), async (req, res) => {
       username: finalUsername,
       key: finalKey
     }, null, 2), 'utf8');
+    
+    // Support new KGAT token format
+    if (finalKey.startsWith('KGAT_')) {
+      fs.writeFileSync(path.join(tempDir, 'access_token'), finalKey.trim(), 'utf8');
+    }
+    
     try {
       fs.chmodSync(path.join(tempDir, 'kaggle.json'), 0o600);
+      if (finalKey.startsWith('KGAT_')) {
+        fs.chmodSync(path.join(tempDir, 'access_token'), 0o600);
+      }
     } catch (e) {
       // Ignore permission/chmod error on Windows/some environments
     }
@@ -214,6 +229,7 @@ app.post('/api/trigger', upload.single('csvFile'), async (req, res) => {
   const env = {
     KAGGLE_USERNAME: finalUsername,
     KAGGLE_KEY: finalKey,
+    KAGGLE_API_TOKEN: finalKey,
     KAGGLE_CONFIG_DIR: tempDir
   };
 
