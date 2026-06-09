@@ -142,35 +142,30 @@ app.post('/api/trigger', upload.single('csvFile'), async (req, res) => {
     return res.status(400).json({ error: 'Kaggle Username and API Key are required. Please configure them.' });
   }
 
-  // Ensure credentials are written to home directory's .kaggle/kaggle.json
-  try {
-    const os = require('os');
-    const userHome = os.homedir();
-    const kaggleDir = path.join(userHome, '.kaggle');
-    if (!fs.existsSync(kaggleDir)) {
-      fs.mkdirSync(kaggleDir, { recursive: true });
-    }
-    fs.writeFileSync(path.join(kaggleDir, 'kaggle.json'), JSON.stringify({
-      username: finalUsername,
-      key: finalKey
-    }, null, 2), 'utf8');
-    try {
-      fs.chmodSync(path.join(kaggleDir, 'kaggle.json'), 0o600);
-    } catch (e) {
-      // Ignore permission chmod error on Windows/some environments
-    }
-  } catch (err) {
-    console.error('Failed to write .kaggle/kaggle.json on server:', err);
-  }
-
   // Create temporary directory for the push
   const jobId = 'job_' + Date.now();
   const tempDir = path.join(__dirname, 'temp_' + jobId);
   fs.mkdirSync(tempDir, { recursive: true });
 
+  // Ensure credentials are written to the job-specific temp directory
+  try {
+    fs.writeFileSync(path.join(tempDir, 'kaggle.json'), JSON.stringify({
+      username: finalUsername,
+      key: finalKey
+    }, null, 2), 'utf8');
+    try {
+      fs.chmodSync(path.join(tempDir, 'kaggle.json'), 0o600);
+    } catch (e) {
+      // Ignore permission/chmod error on Windows/some environments
+    }
+  } catch (err) {
+    console.error('Failed to write temporary kaggle.json on server:', err);
+  }
+
   const env = {
     KAGGLE_USERNAME: finalUsername,
-    KAGGLE_KEY: finalKey
+    KAGGLE_KEY: finalKey,
+    KAGGLE_CONFIG_DIR: tempDir
   };
 
   try {
