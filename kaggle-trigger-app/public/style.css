@@ -481,6 +481,12 @@ select option {
   border-color: rgba(255, 255, 255, 0.2);
 }
 
+.auth-buttons {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
 /* Status Indicator */
 .status-indicator {
   display: inline-flex;

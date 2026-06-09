@@ -61,8 +61,12 @@
               <input type="text" id="backend-url" value="https://airpyk98-truecrime-video-generator.hf.space" placeholder="e.g., https://username-space-name.hf.space (Default: same host)">
             </div>
             
-            <button class="btn secondary-btn" id="save-creds-btn">Save Authentications</button>
+            <div class="auth-buttons">
+              <button class="btn secondary-btn" id="save-creds-btn">Save Authentications</button>
+              <button class="btn secondary-btn" id="test-creds-btn" style="background: linear-gradient(135deg, rgba(255,255,255,0.1), rgba(255,255,255,0.05)); border: 1px solid rgba(255, 255, 255, 0.2);">Test Connection</button>
+            </div>
             <div class="success-message" id="creds-saved-msg">✓ Credentials saved locally in your browser!</div>
+            <div class="status-message" id="creds-test-msg" style="display: none; margin-top: 10px; padding: 10px; border-radius: 6px; font-size: 0.9rem;"></div>
           </div>
         </div>
 

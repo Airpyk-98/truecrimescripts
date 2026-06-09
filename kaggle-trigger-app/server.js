@@ -95,6 +95,55 @@ app.post('/api/setup-local-kaggle', (req, res) => {
   }
 });
 
+// Test Kaggle Credentials Verification
+app.post('/api/test-kaggle', async (req, res) => {
+  const { kaggle_username, kaggle_key } = req.body;
+  
+  const finalUsername = (kaggle_username || '').trim();
+  const finalKey = (kaggle_key || '').trim();
+
+  if (!finalUsername || !finalKey) {
+    return res.status(400).json({ error: 'Kaggle Username and API Key are required to test connection.' });
+  }
+
+  const jobId = 'test_' + Date.now();
+  const tempDir = path.join(__dirname, 'temp_' + jobId);
+  fs.mkdirSync(tempDir, { recursive: true });
+
+  try {
+    // Write temporary kaggle.json
+    fs.writeFileSync(path.join(tempDir, 'kaggle.json'), JSON.stringify({
+      username: finalUsername,
+      key: finalKey
+    }, null, 2), 'utf8');
+
+    const env = {
+      KAGGLE_USERNAME: finalUsername,
+      KAGGLE_KEY: finalKey,
+      KAGGLE_CONFIG_DIR: tempDir
+    };
+
+    // Run a fast, lightweight command to verify credentials
+    const testCmd = `kaggle kernels list --mine --page 1 --page-size 1`;
+    const result = await runCmd(testCmd, env);
+
+    if (result.success) {
+      res.json({ success: true, message: 'Kaggle credentials verified successfully!' });
+    } else {
+      let errMsg = result.stderr || result.stdout || result.error || 'Unknown error';
+      // Strip out private parts of the error if necessary, but keep the core details
+      res.status(401).json({ error: `Verification failed: ${errMsg.trim()}` });
+    }
+  } catch (e) {
+    res.status(500).json({ error: 'Server validation error: ' + e.message });
+  } finally {
+    // Cleanup
+    try {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    } catch (e) {}
+  }
+});
+
 // Trigger a Kaggle notebook run
 app.post('/api/trigger', upload.single('csvFile'), async (req, res) => {
   const {
@@ -117,8 +166,8 @@ app.post('/api/trigger', upload.single('csvFile'), async (req, res) => {
   }
 
   // Determine credentials to use
-  let finalUsername = kaggle_username;
-  let finalKey = kaggle_key;
+  let finalUsername = (kaggle_username || '').trim();
+  let finalKey = (kaggle_key || '').trim();
 
   // If no credentials passed, try to load from local file
   if (!finalUsername || !finalKey) {
@@ -131,8 +180,8 @@ app.post('/api/trigger', upload.single('csvFile'), async (req, res) => {
       if (fs.existsSync(p)) {
         try {
           const creds = JSON.parse(fs.readFileSync(p, 'utf8'));
-          finalUsername = finalUsername || creds.username;
-          finalKey = finalKey || creds.key;
+          finalUsername = finalUsername || (creds.username || '').trim();
+          finalKey = finalKey || (creds.key || '').trim();
         } catch (e) {}
       }
     }
@@ -271,7 +320,7 @@ app.post('/api/trigger', upload.single('csvFile'), async (req, res) => {
 
     // Create kernel-metadata.json
     const metadata = {
-      id: `${finalUsername}/kokoro-tts-automation`,
+      id: `${finalUsername.toLowerCase()}/kokoro-tts-automation`,
       title: 'Kokoro TTS Automation',
       code_file: notebookFilename,
       language: 'python',

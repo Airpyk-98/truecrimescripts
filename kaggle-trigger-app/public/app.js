@@ -6,6 +6,8 @@ document.addEventListener('DOMContentLoaded', () => {
   const backendUrlInput = document.getElementById('backend-url');
   const saveCredsBtn = document.getElementById('save-creds-btn');
   const credsSavedMsg = document.getElementById('creds-saved-msg');
+  const testCredsBtn = document.getElementById('test-creds-btn');
+  const credsTestMsg = document.getElementById('creds-test-msg');
 
   // Helper to resolve API URLs (supports custom backend domains)
   const getApiUrl = (path) => {
@@ -119,6 +121,53 @@ document.addEventListener('DOMContentLoaded', () => {
     setTimeout(() => {
       credsSavedMsg.style.display = 'none';
     }, 3000);
+  });
+
+  // Test Credentials Click
+  testCredsBtn.addEventListener('click', () => {
+    const username = kaggleUsernameInput.value.trim();
+    const key = kaggleKeyInput.value.trim();
+
+    if (!username || !key) {
+      alert('Please fill in both Kaggle Username and API Key first.');
+      return;
+    }
+
+    testCredsBtn.disabled = true;
+    testCredsBtn.textContent = 'Testing...';
+    credsTestMsg.style.display = 'block';
+    credsTestMsg.style.background = 'rgba(255, 255, 255, 0.05)';
+    credsTestMsg.style.color = '#ccc';
+    credsTestMsg.textContent = 'Verifying credentials with Kaggle API...';
+
+    fetch(getApiUrl('/api/test-kaggle'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ kaggle_username: username, kaggle_key: key })
+    })
+    .then(async res => {
+      const data = await res.json();
+      if (res.ok) {
+        credsTestMsg.style.background = 'rgba(46, 213, 115, 0.1)';
+        credsTestMsg.style.color = '#2ed573';
+        credsTestMsg.style.border = '1px solid rgba(46, 213, 115, 0.2)';
+        credsTestMsg.textContent = '✓ ' + data.message;
+        addLogLine('[SYSTEM] Kaggle API connection test succeeded!', 'success');
+      } else {
+        throw new Error(data.error || 'Verification failed');
+      }
+    })
+    .catch(err => {
+      credsTestMsg.style.background = 'rgba(255, 71, 87, 0.1)';
+      credsTestMsg.style.color = '#ff4757';
+      credsTestMsg.style.border = '1px solid rgba(255, 71, 87, 0.2)';
+      credsTestMsg.textContent = '✗ ' + err.message;
+      addLogLine(`[ERROR] Kaggle API test failed: ${err.message}`, 'error');
+    })
+    .finally(() => {
+      testCredsBtn.disabled = false;
+      testCredsBtn.textContent = 'Test Connection';
+    });
   });
 
   // ── 2. Sync range display text ──────────────────────────────
