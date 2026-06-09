@@ -434,19 +434,20 @@ async function pollJobStatus(jobId) {
       const output = res.stdout.trim();
       job.log.push(output);
 
-      // Parse status: e.g. "username/slug has status \"running\"" or "complete"
-      if (output.includes('has status "running"')) {
+      // Parse status: match keywords case-insensitively to support "KernelWorkerStatus.XXXX"
+      const lowerOutput = output.toLowerCase();
+      if (lowerOutput.includes('running')) {
         job.status = 'running';
-      } else if (output.includes('has status "complete"')) {
+      } else if (lowerOutput.includes('complete')) {
         job.status = 'downloading';
         job.log.push('[INFO] Kaggle run complete! Fetching video outputs...');
         clearInterval(timer);
         downloadOutputs(jobId);
-      } else if (output.includes('has status "error"')) {
+      } else if (lowerOutput.includes('error')) {
         job.status = 'error';
         job.log.push('[ERROR] Kaggle run failed with error status.');
         cleanupJobTemp(jobId);
-      } else if (output.includes('has status "queued"')) {
+      } else if (lowerOutput.includes('queued')) {
         job.status = 'queued';
       }
     } else {
