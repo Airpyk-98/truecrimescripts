@@ -53,8 +53,8 @@ With your script CSV ready, you can now compile it into a fully-produced video w
 
 ### Step 1: Open the Control Center
 Navigate to the frontend web application:
-* **Production Frontend URL:** [https://public-wine-three-41.vercel.app](https://public-wine-three-41.vercel.app)
-* **Direct Backend Endpoint:** [https://airpyk98-truecrime-video-generator.hf.space](https://airpyk98-truecrime-video-generator.hf.space)
+* **Production Frontend URL:** `https://your-app-name.vercel.app`
+* **Direct Backend Endpoint:** `https://your-space-name.hf.space`
 
 ### Step 2: Configure & Test Authentication
 Before triggering a run, you must tell the app how to connect to Kaggle:
