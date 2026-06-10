@@ -74,6 +74,10 @@ Before triggering a run, you must tell the app how to connect to Kaggle:
    * **Voice Model:** Choose a Kokoro voice (e.g., `am_michael` for energetic narration or `af_heart` for expressive female narration).
    * **Video Speed:** Adjust the range slider (recommended: `1.10x` to `1.20x` for engaging pacing).
    * **Subtitles:** Check `Burn Video Captions` to overlay dynamic, high-visibility captions.
+   * **HuggingFace Token Override:** *(Optional)* Leave this empty if you want the backend to use its default space token. If you provide a token, it will override the Hugging Face model pull settings dynamically at runtime. 
+   
+   > [!WARNING]
+   > **Security Policy:** Never hardcode your actual Hugging Face Access Token (`hf_...`) directly inside the Jupyter notebook code cells. The `HF_TOKEN_OVERRIDE` variable inside the base notebook must always remain empty (`""`). The AI agent must only pass this token dynamically during runtime parameters, keeping it safe from commits.
 2. *(Optional)* Click **Advanced Caption Options** to customize font size, hex colors, outline strokes, and vertical positioning.
 
 ### Step 5: Trigger the Pipeline
