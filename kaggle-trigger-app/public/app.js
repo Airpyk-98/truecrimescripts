@@ -455,6 +455,48 @@ document.addEventListener('DOMContentLoaded', () => {
     // Configure download buttons
     downloadVideoBtn.href = fullVideoUrl;
     downloadVideoBtn.setAttribute('download', `final_video_${aspectRatio.replace(':', '_')}.mp4`);
+    
+    // Add client-side blob download logic to bypass cross-origin restrictions on the 'download' attribute
+    downloadVideoBtn.onclick = (e) => {
+      e.preventDefault();
+      
+      const btnTextSpan = downloadVideoBtn.querySelector('span');
+      const originalText = btnTextSpan.textContent;
+      btnTextSpan.textContent = 'Downloading to browser...';
+      downloadVideoBtn.style.pointerEvents = 'none';
+      downloadVideoBtn.style.opacity = '0.7';
+
+      addLogLine(`[SYSTEM] Starting direct video file download...`, 'system');
+
+      fetch(fullVideoUrl)
+        .then(response => {
+          if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+          return response.blob();
+        })
+        .then(blob => {
+          const blobUrl = window.URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.style.display = 'none';
+          a.href = blobUrl;
+          a.download = `final_video_${aspectRatio.replace(':', '_')}.mp4`;
+          document.body.appendChild(a);
+          a.click();
+          window.URL.revokeObjectURL(blobUrl);
+          document.body.removeChild(a);
+          addLogLine(`[SUCCESS] Video download complete!`, 'success');
+        })
+        .catch(err => {
+          console.error('Download fetch failed, falling back to direct link:', err);
+          addLogLine(`[WARN] Download fetch failed: ${err.message}. Opening file in new tab instead.`, 'system');
+          // Fallback: open in new tab
+          window.open(fullVideoUrl, '_blank');
+        })
+        .finally(() => {
+          btnTextSpan.textContent = originalText;
+          downloadVideoBtn.style.pointerEvents = 'auto';
+          downloadVideoBtn.style.opacity = '1';
+        });
+    };
 
     // Setup Copy URL Button
     copyLinkBtn.onclick = () => {
