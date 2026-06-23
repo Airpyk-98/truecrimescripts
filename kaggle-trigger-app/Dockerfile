@@ -1,4 +1,4 @@
-FROM node:22-bullseye
+FROM node:22-bookworm
 
 # Install Python 3 and pip
 RUN apt-get update && apt-get install -y \
@@ -6,8 +6,10 @@ RUN apt-get update && apt-get install -y \
     python3-pip \
     && rm -rf /var/lib/apt/lists/*
 
+ENV PIP_BREAK_SYSTEM_PACKAGES=1
+
 # Install Kaggle CLI
-RUN pip3 install --no-cache-dir kaggle
+RUN pip3 install --no-cache-dir --upgrade kaggle
 
 # Configure app directory permissions for the existing 'node' user (UID 1000)
 WORKDIR /app

@@ -24,7 +24,7 @@ const upload = multer({ storage: storage });
 const jobs = {};
 
 // Root directories
-const BASE_NOTEBOOK_PATH = 'C:\\Users\\DELL\\Downloads\\kokoro-tts-automation (3).ipynb';
+const BASE_NOTEBOOK_PATH = path.join(__dirname, 'Youtube-Truecrime-FLUX-Zai-KokoroTTS-T4.ipynb');
 const OUTPUTS_DIR = path.join(__dirname, 'public', 'outputs');
 if (!fs.existsSync(OUTPUTS_DIR)) {
   fs.mkdirSync(OUTPUTS_DIR, { recursive: true });
@@ -163,7 +163,9 @@ app.post('/api/trigger', upload.single('csvFile'), async (req, res) => {
     video_speed,
     hf_token_override,
     kaggle_username,
-    kaggle_key
+    kaggle_key,
+    use_z_image,
+    z_image_key
   } = req.body;
 
   // Validate uploaded file
@@ -240,7 +242,7 @@ app.post('/api/trigger', upload.single('csvFile'), async (req, res) => {
 
     if (!fs.existsSync(notebookPath)) {
       // Look in the local folder as fallback
-      notebookPath = path.join(__dirname, 'kokoro-tts-automation.ipynb');
+      notebookPath = path.join(__dirname, 'Youtube-Truecrime-FLUX-Zai-KokoroTTS-T4.ipynb');
       if (!fs.existsSync(notebookPath)) {
         // Look in downloads directory
         const userHome = process.env.USERPROFILE || process.env.HOME || 'C:\\Users\\DELL';
@@ -306,6 +308,8 @@ app.post('/api/trigger', upload.single('csvFile'), async (req, res) => {
     cellText = cellText.replace(/CAPTION_Y_POS\s*=\s*[0-9.]+/, `CAPTION_Y_POS     = ${parseFloat(caption_y_pos) || 0.80}`);
     cellText = cellText.replace(/VIDEO_SPEED\s*=\s*[0-9.]+/, `VIDEO_SPEED    = ${parseFloat(video_speed) || 1.1}`);
     cellText = cellText.replace(/HF_TOKEN_OVERRIDE\s*=\s*['"][^'"]*['"]/, `HF_TOKEN_OVERRIDE = "${hf_token_override || ''}"`);
+    cellText = cellText.replace(/USE_Z_IMAGE\s*=\s*(True|False)/i, `USE_Z_IMAGE = ${use_z_image === 'true' ? 'True' : 'False'}`);
+    cellText = cellText.replace(/Z_IMAGE_KEY\s*=\s*['"][^'"]*['"]/, `Z_IMAGE_KEY = "${z_image_key || ''}"`);
     cellText = cellText.replace(/CSV_DATA_URL\s*=\s*['"][^'"]*['"]/, `CSV_DATA_URL   = "input_data.csv"`);
 
     // Dynamic bypass for Pandas storage_options error on local file read
@@ -317,7 +321,7 @@ app.post('/api/trigger', upload.single('csvFile'), async (req, res) => {
     notebookData.cells[configCellIndex].source = cellText.match(/[^\n]*\n|[^\n]+/g) || [];
 
     // Write modified notebook
-    const notebookFilename = 'kokoro-tts-automation.ipynb';
+    const notebookFilename = 'Youtube-Truecrime-FLUX-Zai-KokoroTTS-T4.ipynb';
     fs.writeFileSync(
       path.join(tempDir, notebookFilename),
       JSON.stringify(notebookData, null, 2),
@@ -326,13 +330,14 @@ app.post('/api/trigger', upload.single('csvFile'), async (req, res) => {
 
     // Create kernel-metadata.json
     const metadata = {
-      id: `${finalUsername.toLowerCase()}/kokoro-tts-automation`,
-      title: 'Kokoro TTS Automation',
+      id: `${finalUsername.toLowerCase()}/youtube-truecrime-flux-zai-kokorotts-t4`,
+      title: 'Youtube-Truecrime-FLUX-Zai-KokoroTTS-T4',
       code_file: notebookFilename,
       language: 'python',
       kernel_type: 'notebook',
       is_private: true,
       enable_gpu: true,
+      accelerator: 'NvidiaTeslaT4',
       enable_internet: true,
       dataset_sources: [],
       competition_sources: [],
@@ -346,7 +351,7 @@ app.post('/api/trigger', upload.single('csvFile'), async (req, res) => {
     );
 
     // Push the notebook to Kaggle using the CLI
-    const pushCmd = `kaggle kernels push -p "${tempDir}"`;
+    const pushCmd = `kaggle kernels push -p "${tempDir}" --accelerator NvidiaTeslaT4`;
     const pushResult = await runCmd(pushCmd, env);
 
     if (!pushResult.success) {
@@ -358,7 +363,7 @@ app.post('/api/trigger', upload.single('csvFile'), async (req, res) => {
       id: jobId,
       status: 'queued',
       username: finalUsername,
-      slug: 'kokoro-tts-automation',
+      slug: 'youtube-truecrime-flux-zai-kokorotts-t4',
       aspectRatio: aspect_ratio || '16:9',
       tempDir: tempDir,
       env: env,

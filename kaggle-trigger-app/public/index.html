@@ -131,6 +131,16 @@
                 <input type="checkbox" id="caption-enabled" checked>
                 <label for="caption-enabled">Burn Video Captions</label>
               </div>
+
+              <div class="input-group checkbox-group" style="grid-column: 1 / -1; margin-top: 10px;">
+                <input type="checkbox" id="use-z-image">
+                <label for="use-z-image">Use Paid Z Image API (kie.ai) instead of Flux</label>
+              </div>
+
+              <div class="input-group" id="z-image-key-group" style="display: none; grid-column: 1 / -1;">
+                <label for="z-image-key">Z Image API Key (kie.ai)</label>
+                <input type="password" id="z-image-key" placeholder="Enter your kie.ai Bearer Token">
+              </div>
             </div>
 
             <!-- Advanced caption options (toggle-able or just visible) -->
@@ -242,6 +252,16 @@
               </button>
             </div>
             <div class="success-message" id="link-copied-msg">✓ Link copied to clipboard!</div>
+          </div>
+        </div>
+
+        <!-- Render History Card -->
+        <div class="card glass-card history-card" id="history-card" style="margin-top: 20px;">
+          <div class="card-header">
+            <h2>Render History (Logs)</h2>
+          </div>
+          <div class="card-body" id="history-list">
+            <p style="color: var(--text-muted); font-size: 0.9rem;">No completed renders yet.</p>
           </div>
         </div>
 

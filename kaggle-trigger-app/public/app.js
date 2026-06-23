@@ -9,6 +9,13 @@ document.addEventListener('DOMContentLoaded', () => {
   const testCredsBtn = document.getElementById('test-creds-btn');
   const credsTestMsg = document.getElementById('creds-test-msg');
 
+  const useZImageToggle = document.getElementById('use-z-image');
+  const zImageKeyGroup = document.getElementById('z-image-key-group');
+  const zImageKeyInput = document.getElementById('z-image-key');
+
+  // History Elements
+  const historyList = document.getElementById('history-list');
+
   // Helper to resolve API URLs (supports custom backend domains)
   const getApiUrl = (path) => {
     const backendUrl = backendUrlInput ? backendUrlInput.value.trim().replace(/\/$/, '') : '';
@@ -67,11 +74,18 @@ document.addEventListener('DOMContentLoaded', () => {
     const storedKey = localStorage.getItem('kaggle_key');
     const storedHf = localStorage.getItem('hf_token');
     const storedBackend = localStorage.getItem('backend_url');
+    const storedUseZImage = localStorage.getItem('use_z_image');
+    const storedZImageKey = localStorage.getItem('z_image_key');
 
     if (storedUsername) kaggleUsernameInput.value = storedUsername;
     if (storedKey) kaggleKeyInput.value = storedKey;
     if (storedHf) hfTokenInput.value = storedHf;
     if (storedBackend) backendUrlInput.value = storedBackend;
+    if (storedZImageKey) zImageKeyInput.value = storedZImageKey;
+    if (storedUseZImage === 'true') {
+      useZImageToggle.checked = true;
+      zImageKeyGroup.style.display = 'block';
+    }
 
     // Check if Kaggle credentials already exist in the environment/PC
     fetch(getApiUrl('/api/check-local-kaggle'))
@@ -95,11 +109,15 @@ document.addEventListener('DOMContentLoaded', () => {
     const key = kaggleKeyInput.value.trim();
     const hf = hfTokenInput.value.trim();
     const backend = backendUrlInput.value.trim();
+    const useZImage = useZImageToggle.checked;
+    const zImageKey = zImageKeyInput.value.trim();
 
     localStorage.setItem('kaggle_username', username);
     localStorage.setItem('kaggle_key', key);
     localStorage.setItem('hf_token', hf);
     localStorage.setItem('backend_url', backend);
+    localStorage.setItem('use_z_image', useZImage);
+    localStorage.setItem('z_image_key', zImageKey);
 
     // Call server to write credentials to ~/.kaggle/kaggle.json (for local usage)
     fetch(getApiUrl('/api/setup-local-kaggle'), {
@@ -197,6 +215,11 @@ document.addEventListener('DOMContentLoaded', () => {
     advBody.style.display = advToggle.classList.contains('active') ? 'block' : 'none';
   });
 
+  // Toggle Z Image API Group
+  useZImageToggle.addEventListener('change', (e) => {
+    zImageKeyGroup.style.display = e.target.checked ? 'block' : 'none';
+  });
+
   // ── 3. Drag & Drop CSV Logic ────────────────────────────────
   dropZone.addEventListener('click', () => csvFileInput.click());
 
@@ -288,6 +311,8 @@ document.addEventListener('DOMContentLoaded', () => {
     formData.append('hf_token_override', hfTokenInput.value.trim());
     formData.append('kaggle_username', username);
     formData.append('kaggle_key', key);
+    formData.append('use_z_image', useZImageToggle.checked ? 'true' : 'false');
+    formData.append('z_image_key', zImageKeyInput.value.trim());
 
     // Call backend trigger route
     fetch(getApiUrl('/api/trigger'), {
@@ -421,6 +446,9 @@ document.addEventListener('DOMContentLoaded', () => {
             
             // Present video output
             showOutputVideo(data.videoUrl, data.aspectRatio);
+            
+            // Add to Render History
+            saveToHistory(data.videoUrl, data.aspectRatio, jobId);
           } else if (data.status === 'error') {
             updateStatusIndicator('error');
             updateProgress(100, 'Pipeline Error!');
@@ -518,4 +546,79 @@ document.addEventListener('DOMContentLoaded', () => {
     outputCard.style.display = 'block';
     outputCard.scrollIntoView({ behavior: 'smooth' });
   };
+
+  // ── 8. Render History / Log Page ────────────────────────────
+  const loadHistory = () => {
+    const historyJson = localStorage.getItem('render_history');
+    if (!historyJson) return;
+    
+    let history = [];
+    try {
+      history = JSON.parse(historyJson);
+    } catch (e) {
+      console.error('Failed to parse history:', e);
+      return;
+    }
+
+    if (history.length > 0) {
+      historyList.innerHTML = '';
+      history.slice().reverse().forEach(item => {
+        const div = document.createElement('div');
+        div.className = 'history-item';
+        div.style.background = 'rgba(0,0,0,0.2)';
+        div.style.padding = '10px';
+        div.style.marginBottom = '10px';
+        div.style.borderRadius = '6px';
+        div.style.display = 'flex';
+        div.style.justifyContent = 'space-between';
+        div.style.alignItems = 'center';
+
+        const backendUrl = backendUrlInput ? backendUrlInput.value.trim().replace(/\/$/, '') : '';
+        const fullUrl = backendUrl ? \`\${backendUrl}\${item.url}\` : (window.location.origin + item.url);
+
+        div.innerHTML = \`
+          <div>
+            <strong>\${new Date(item.timestamp).toLocaleString()}</strong><br>
+            <span style="color: var(--text-muted); font-size: 0.85rem;">Job: \${item.jobId} | Ratio: \${item.ratio}</span>
+          </div>
+          <div>
+            <a href="\${fullUrl}" target="_blank" class="btn secondary-btn" style="padding: 5px 10px; font-size: 0.85rem; margin-right: 5px;">View</a>
+            <button class="btn secondary-btn copy-hist-btn" data-url="\${fullUrl}" style="padding: 5px 10px; font-size: 0.85rem;">Copy Link</button>
+          </div>
+        \`;
+        historyList.appendChild(div);
+      });
+
+      // Bind copy buttons
+      document.querySelectorAll('.copy-hist-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          navigator.clipboard.writeText(e.target.getAttribute('data-url')).then(() => {
+            const original = e.target.textContent;
+            e.target.textContent = 'Copied!';
+            setTimeout(() => e.target.textContent = original, 2000);
+          });
+        });
+      });
+    }
+  };
+
+  const saveToHistory = (url, ratio, jobId) => {
+    let history = [];
+    try {
+      history = JSON.parse(localStorage.getItem('render_history')) || [];
+    } catch (e) {}
+
+    history.push({
+      url: url,
+      ratio: ratio,
+      jobId: jobId,
+      timestamp: Date.now()
+    });
+
+    localStorage.setItem('render_history', JSON.stringify(history));
+    loadHistory();
+  };
+
+  // Initial load of history
+  loadHistory();
 });
