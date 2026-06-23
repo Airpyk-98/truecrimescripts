@@ -574,18 +574,18 @@ document.addEventListener('DOMContentLoaded', () => {
         div.style.alignItems = 'center';
 
         const backendUrl = backendUrlInput ? backendUrlInput.value.trim().replace(/\/$/, '') : '';
-        const fullUrl = backendUrl ? \`\${backendUrl}\${item.url}\` : (window.location.origin + item.url);
+        const fullUrl = backendUrl ? `${backendUrl}${item.url}` : (window.location.origin + item.url);
 
-        div.innerHTML = \`
+        div.innerHTML = `
           <div>
-            <strong>\${new Date(item.timestamp).toLocaleString()}</strong><br>
-            <span style="color: var(--text-muted); font-size: 0.85rem;">Job: \${item.jobId} | Ratio: \${item.ratio}</span>
+            <strong>${new Date(item.timestamp).toLocaleString()}</strong><br>
+            <span style="color: var(--text-muted); font-size: 0.85rem;">Job: ${item.jobId} | Ratio: ${item.ratio}</span>
           </div>
           <div>
-            <a href="\${fullUrl}" target="_blank" class="btn secondary-btn" style="padding: 5px 10px; font-size: 0.85rem; margin-right: 5px;">View</a>
-            <button class="btn secondary-btn copy-hist-btn" data-url="\${fullUrl}" style="padding: 5px 10px; font-size: 0.85rem;">Copy Link</button>
+            <a href="${fullUrl}" target="_blank" class="btn secondary-btn" style="padding: 5px 10px; font-size: 0.85rem; margin-right: 5px;">View</a>
+            <button class="btn secondary-btn" onclick="navigator.clipboard.writeText('${fullUrl}').then(() => alert('Copied!'))" style="padding: 5px 10px; font-size: 0.85rem;">Copy Link</button>
           </div>
-        \`;
+        `;
         historyList.appendChild(div);
       });
 
