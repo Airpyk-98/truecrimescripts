@@ -6,7 +6,7 @@ import re
 print("Starting Hugging Face upload script...")
 api = HfApi()
 
-repo_id = "Airpyk98/truecrime-video-generator"
+repo_id = "epic98/truecrime-video-generator"
 print(f"Uploading folder to Space: {repo_id}")
 
 # Parse HF token from tokens.txt or environment variable
