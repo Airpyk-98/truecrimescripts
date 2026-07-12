@@ -133,8 +133,13 @@ def run_phase_1_z_image():
             # 3. Replace the execution call
             if "run_phase_1_flux()" in source and "if USE_Z_IMAGE:" not in source:
                 new_lines = []
-                for line in cell['source']:
+                # Only replace the last occurrence
+                run_idx = -1
+                for i, line in enumerate(cell['source']):
                     if 'run_phase_1_flux()' in line and not line.strip().startswith('def '):
+                        run_idx = i
+                for i, line in enumerate(cell['source']):
+                    if i == run_idx:
                         new_lines.append('if USE_Z_IMAGE:\n')
                         new_lines.append('    run_phase_1_z_image()\n')
                         new_lines.append('else:\n')
