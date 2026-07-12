@@ -15,6 +15,11 @@ document.addEventListener('DOMContentLoaded', () => {
   const zImageKeyGroup = document.getElementById('z-image-key-group');
   const zImageKeyInput = document.getElementById('z-image-key');
 
+  const useBgmToggle = document.getElementById('use-bgm');
+  const bgmVolumeInput = document.getElementById('bgm-volume');
+  const bgmVolVal = document.getElementById('bgm-vol-val');
+  const bgmVolumeGroup = document.getElementById('bgm-volume-group');
+
   const dropZone = document.getElementById('drop-zone');
   const csvFileInput = document.getElementById('csv-file-input');
   const selectedFileDetails = document.getElementById('selected-file-details');
@@ -205,6 +210,15 @@ document.addEventListener('DOMContentLoaded', () => {
   // ═══════════════════════════════════════════════════════════
   videoSpeedInput.addEventListener('input', (e) => { speedVal.textContent = parseFloat(e.target.value).toFixed(2) + 'x'; });
   captionYPosInput.addEventListener('input', (e) => { yPosVal.textContent = parseFloat(e.target.value).toFixed(2); });
+  
+  bgmVolumeInput.addEventListener('input', (e) => { bgmVolVal.textContent = parseFloat(e.target.value).toFixed(2); });
+  useBgmToggle.addEventListener('change', () => {
+    bgmVolumeGroup.style.display = useBgmToggle.checked ? 'flex' : 'none';
+  });
+
+  useZImageToggle.addEventListener('change', () => {
+    zImageKeyGroup.style.display = useZImageToggle.checked ? 'block' : 'none';
+  });
   captionColorPicker.addEventListener('input', (e) => { captionColorText.value = e.target.value; });
   captionColorText.addEventListener('input', (e) => { if (e.target.value.startsWith('#') && e.target.value.length === 7) captionColorPicker.value = e.target.value; });
   advToggle.addEventListener('click', () => {
@@ -289,6 +303,8 @@ document.addEventListener('DOMContentLoaded', () => {
     formData.append('kaggle_key', key);
     formData.append('use_z_image', useZImageToggle.checked ? 'true' : 'false');
     formData.append('z_image_key', zImageKeyInput.value.trim());
+    formData.append('use_bgm', useBgmToggle.checked ? 'true' : 'false');
+    formData.append('bgm_volume', bgmVolumeInput.value);
 
     fetch(getApiUrl('/api/trigger'), { method: 'POST', body: formData })
     .then(async (res) => {

@@ -165,7 +165,9 @@ app.post('/api/trigger', upload.single('csvFile'), async (req, res) => {
     kaggle_username,
     kaggle_key,
     use_z_image,
-    z_image_key
+    z_image_key,
+    use_bgm,
+    bgm_volume
   } = req.body;
 
   // Validate uploaded file
@@ -310,6 +312,8 @@ app.post('/api/trigger', upload.single('csvFile'), async (req, res) => {
     cellText = cellText.replace(/HF_TOKEN_OVERRIDE\s*=\s*['"][^'"]*['"]/, `HF_TOKEN_OVERRIDE = "${hf_token_override || ''}"`);
     cellText = cellText.replace(/USE_Z_IMAGE\s*=\s*(True|False)/i, `USE_Z_IMAGE = ${use_z_image === 'true' ? 'True' : 'False'}`);
     cellText = cellText.replace(/Z_IMAGE_KEY\s*=\s*['"][^'"]*['"]/, `Z_IMAGE_KEY = "${z_image_key || ''}"`);
+    cellText = cellText.replace(/USE_BGM\s*=\s*(True|False)/i, `USE_BGM = ${use_bgm === 'true' ? 'True' : 'False'}`);
+    cellText = cellText.replace(/BGM_VOLUME\s*=\s*[0-9.]+/, `BGM_VOLUME = ${parseFloat(bgm_volume) || 0.12}`);
     cellText = cellText.replace(/CSV_DATA_URL\s*=\s*['"][^'"]*['"]/, `CSV_DATA_URL   = "input_data.csv"`);
 
     // Dynamic bypass for Pandas storage_options error on local file read
