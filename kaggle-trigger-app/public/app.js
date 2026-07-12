@@ -67,7 +67,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Helper to resolve API URLs
   const getApiUrl = (path) => {
-    const backendUrl = backendUrlInput ? backendUrlInput.value.trim().replace(/\/$/, '') : '';
+    let backendUrl = backendUrlInput ? backendUrlInput.value.trim().replace(/\/$/, '') : '';
+    // IMPORTANT FIX: Hard fallback to epic98 if left empty, because Airpyk98 is broken/cached in user's browser
+    if (!backendUrl || backendUrl.includes("Airpyk98")) {
+        backendUrl = "https://epic98-truecrime-video-generator.hf.space";
+        if (backendUrlInput) {
+            backendUrlInput.value = backendUrl;
+            localStorage.setItem('backendUrl', backendUrl);
+        }
+    }
     return backendUrl ? `${backendUrl}${path}` : path;
   };
 
