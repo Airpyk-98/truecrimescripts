@@ -37,7 +37,11 @@ try:
             ".git*",
             "package-lock.json",
             "upload.py",
-            "tokens.txt"
+            "tokens.txt",
+            "make_doc.py",
+            "fix_*.py",
+            "patch_notebook.py",
+            "find_key.py"
         ]
     )
     print("Upload completed successfully!")
