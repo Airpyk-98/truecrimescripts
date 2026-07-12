@@ -1,5 +1,7 @@
 document.addEventListener('DOMContentLoaded', () => {
-  // DOM Elements
+  // ═══════════════════════════════════════════════════════════
+  // DOM ELEMENTS
+  // ═══════════════════════════════════════════════════════════
   const kaggleUsernameInput = document.getElementById('kaggle-username');
   const kaggleKeyInput = document.getElementById('kaggle-key');
   const hfTokenInput = document.getElementById('hf-token');
@@ -12,15 +14,6 @@ document.addEventListener('DOMContentLoaded', () => {
   const useZImageToggle = document.getElementById('use-z-image');
   const zImageKeyGroup = document.getElementById('z-image-key-group');
   const zImageKeyInput = document.getElementById('z-image-key');
-
-  // History Elements
-  const historyList = document.getElementById('history-list');
-
-  // Helper to resolve API URLs (supports custom backend domains)
-  const getApiUrl = (path) => {
-    const backendUrl = backendUrlInput ? backendUrlInput.value.trim().replace(/\/$/, '') : '';
-    return backendUrl ? `${backendUrl}${path}` : path;
-  };
 
   const dropZone = document.getElementById('drop-zone');
   const csvFileInput = document.getElementById('csv-file-input');
@@ -63,98 +56,106 @@ document.addEventListener('DOMContentLoaded', () => {
   const copyBtnText = document.getElementById('copy-btn-text');
   const linkCopiedMsg = document.getElementById('link-copied-msg');
 
+  const historyList = document.getElementById('history-list');
+  const clearHistoryBtn = document.getElementById('clear-history-btn');
+  const logBadge = document.getElementById('log-badge');
+
   let selectedFile = null;
   let pollingInterval = null;
   let elapsedSeconds = 0;
   let elapsedTimer = null;
 
-  // ── 1. Load Stored Credentials ──────────────────────────────
-  const loadCredentials = () => {
-    const storedUsername = localStorage.getItem('kaggle_username');
-    const storedKey = localStorage.getItem('kaggle_key');
-    const storedHf = localStorage.getItem('hf_token');
-    const storedBackend = localStorage.getItem('backend_url');
-    const storedUseZImage = localStorage.getItem('use_z_image');
-    const storedZImageKey = localStorage.getItem('z_image_key');
+  // Helper to resolve API URLs
+  const getApiUrl = (path) => {
+    const backendUrl = backendUrlInput ? backendUrlInput.value.trim().replace(/\/$/, '') : '';
+    return backendUrl ? `${backendUrl}${path}` : path;
+  };
 
-    if (storedUsername) kaggleUsernameInput.value = storedUsername;
-    if (storedKey) kaggleKeyInput.value = storedKey;
-    if (storedHf) hfTokenInput.value = storedHf;
-    if (storedBackend) backendUrlInput.value = storedBackend;
-    if (storedZImageKey) zImageKeyInput.value = storedZImageKey;
-    if (storedUseZImage === 'true') {
+  // ═══════════════════════════════════════════════════════════
+  // 1. TAB SWITCHING
+  // ═══════════════════════════════════════════════════════════
+  const tabBtns = document.querySelectorAll('.tab-btn');
+  const tabContents = document.querySelectorAll('.tab-content');
+
+  const switchTab = (tabName) => {
+    tabBtns.forEach(btn => btn.classList.toggle('active', btn.dataset.tab === tabName));
+    tabContents.forEach(tc => tc.classList.toggle('active', tc.id === `tab-${tabName}`));
+    localStorage.setItem('active_tab', tabName);
+  };
+
+  tabBtns.forEach(btn => {
+    btn.addEventListener('click', () => switchTab(btn.dataset.tab));
+  });
+
+  // Restore last active tab
+  const savedTab = localStorage.getItem('active_tab');
+  if (savedTab) switchTab(savedTab);
+
+  // ═══════════════════════════════════════════════════════════
+  // 2. LOAD / SAVE CREDENTIALS
+  // ═══════════════════════════════════════════════════════════
+  const loadCredentials = () => {
+    const s = (k) => localStorage.getItem(k) || '';
+    kaggleUsernameInput.value = s('kaggle_username');
+    kaggleKeyInput.value = s('kaggle_key');
+    hfTokenInput.value = s('hf_token');
+    backendUrlInput.value = s('backend_url');
+    zImageKeyInput.value = s('z_image_key');
+
+    if (localStorage.getItem('use_z_image') === 'true') {
       useZImageToggle.checked = true;
       zImageKeyGroup.style.display = 'block';
     }
 
-    // Check if Kaggle credentials already exist in the environment/PC
+    // Check server for local Kaggle creds
     fetch(getApiUrl('/api/check-local-kaggle'))
       .then(res => res.json())
       .then(data => {
-        if (data.exists && !storedUsername) {
+        if (data.exists && !s('kaggle_username')) {
           addLogLine(`[SYSTEM] Found local Kaggle CLI credentials for user: ${data.username}`, 'system');
           kaggleUsernameInput.value = data.username;
-          // Store locally in browser
           localStorage.setItem('kaggle_username', data.username);
         }
       })
-      .catch(err => console.error('Error checking local credentials:', err));
+      .catch(() => {});
   };
 
   loadCredentials();
 
-  // Save Credentials Click
   saveCredsBtn.addEventListener('click', () => {
-    const username = kaggleUsernameInput.value.trim();
-    const key = kaggleKeyInput.value.trim();
-    const hf = hfTokenInput.value.trim();
-    const backend = backendUrlInput.value.trim();
-    const useZImage = useZImageToggle.checked;
-    const zImageKey = zImageKeyInput.value.trim();
+    localStorage.setItem('kaggle_username', kaggleUsernameInput.value.trim());
+    localStorage.setItem('kaggle_key', kaggleKeyInput.value.trim());
+    localStorage.setItem('hf_token', hfTokenInput.value.trim());
+    localStorage.setItem('backend_url', backendUrlInput.value.trim());
+    localStorage.setItem('use_z_image', useZImageToggle.checked);
+    localStorage.setItem('z_image_key', zImageKeyInput.value.trim());
 
-    localStorage.setItem('kaggle_username', username);
-    localStorage.setItem('kaggle_key', key);
-    localStorage.setItem('hf_token', hf);
-    localStorage.setItem('backend_url', backend);
-    localStorage.setItem('use_z_image', useZImage);
-    localStorage.setItem('z_image_key', zImageKey);
-
-    // Call server to write credentials to ~/.kaggle/kaggle.json (for local usage)
+    // Sync to server
     fetch(getApiUrl('/api/setup-local-kaggle'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username, key })
-    })
-    .then(res => res.json())
-    .then(data => {
-      if (data.success) {
-        addLogLine('[SYSTEM] Kaggle API keys synchronized and saved.', 'success');
-      } else {
-        addLogLine(`[WARN] Local environment save error: ${data.error}`, 'system');
-      }
-    })
-    .catch(err => console.error(err));
+      body: JSON.stringify({
+        username: kaggleUsernameInput.value.trim(),
+        key: kaggleKeyInput.value.trim()
+      })
+    }).then(r => r.json()).then(d => {
+      if (d.success) addLogLine('[SYSTEM] Kaggle API keys synchronized.', 'success');
+    }).catch(() => {});
 
     credsSavedMsg.style.display = 'block';
-    setTimeout(() => {
-      credsSavedMsg.style.display = 'none';
-    }, 3000);
+    setTimeout(() => { credsSavedMsg.style.display = 'none'; }, 3000);
   });
 
-  // Test Credentials Click
+  // Test Connection
   testCredsBtn.addEventListener('click', () => {
     const username = kaggleUsernameInput.value.trim();
     const key = kaggleKeyInput.value.trim();
-
-    if (!username || !key) {
-      alert('Please fill in both Kaggle Username and API Key first.');
-      return;
-    }
+    if (!username || !key) { alert('Please fill in both Kaggle Username and API Key first.'); return; }
 
     testCredsBtn.disabled = true;
-    testCredsBtn.textContent = 'Testing...';
+    testCredsBtn.innerHTML = '<span>⏳</span> Testing...';
     credsTestMsg.style.display = 'block';
-    credsTestMsg.style.background = 'rgba(255, 255, 255, 0.05)';
+    credsTestMsg.style.background = 'rgba(255,255,255,0.05)';
     credsTestMsg.style.color = '#ccc';
     credsTestMsg.textContent = 'Verifying credentials with Kaggle API...';
 
@@ -166,89 +167,57 @@ document.addEventListener('DOMContentLoaded', () => {
     .then(async res => {
       const data = await res.json();
       if (res.ok) {
-        credsTestMsg.style.background = 'rgba(46, 213, 115, 0.1)';
+        credsTestMsg.style.background = 'rgba(46,213,115,0.1)';
         credsTestMsg.style.color = '#2ed573';
-        credsTestMsg.style.border = '1px solid rgba(46, 213, 115, 0.2)';
+        credsTestMsg.style.border = '1px solid rgba(46,213,115,0.2)';
         credsTestMsg.textContent = '✓ ' + data.message;
-        addLogLine('[SYSTEM] Kaggle API connection test succeeded!', 'success');
       } else {
         throw new Error(data.error || 'Verification failed');
       }
     })
     .catch(err => {
-      credsTestMsg.style.background = 'rgba(255, 71, 87, 0.1)';
+      credsTestMsg.style.background = 'rgba(255,71,87,0.1)';
       credsTestMsg.style.color = '#ff4757';
-      credsTestMsg.style.border = '1px solid rgba(255, 71, 87, 0.2)';
+      credsTestMsg.style.border = '1px solid rgba(255,71,87,0.2)';
       credsTestMsg.textContent = '✗ ' + err.message;
-      addLogLine(`[ERROR] Kaggle API test failed: ${err.message}`, 'error');
     })
     .finally(() => {
       testCredsBtn.disabled = false;
-      testCredsBtn.textContent = 'Test Connection';
+      testCredsBtn.innerHTML = '<span>🔌</span> Test Kaggle Connection';
     });
   });
 
-  // ── 2. Sync range display text ──────────────────────────────
-  videoSpeedInput.addEventListener('input', (e) => {
-    speedVal.textContent = parseFloat(e.target.value).toFixed(2) + 'x';
+  // Z Image toggle
+  useZImageToggle.addEventListener('change', (e) => {
+    zImageKeyGroup.style.display = e.target.checked ? 'block' : 'none';
   });
 
-  captionYPosInput.addEventListener('input', (e) => {
-    yPosVal.textContent = parseFloat(e.target.value).toFixed(2);
-  });
-
-  // Sync Color Picker with text field
-  captionColorPicker.addEventListener('input', (e) => {
-    captionColorText.value = e.target.value;
-  });
-
-  captionColorText.addEventListener('input', (e) => {
-    const val = e.target.value;
-    if (val.startsWith('#') && val.length === 7) {
-      captionColorPicker.value = val;
-    }
-  });
-
-  // Toggle Advanced Settings
+  // ═══════════════════════════════════════════════════════════
+  // 3. UI CONTROLS (range sliders, color, advanced)
+  // ═══════════════════════════════════════════════════════════
+  videoSpeedInput.addEventListener('input', (e) => { speedVal.textContent = parseFloat(e.target.value).toFixed(2) + 'x'; });
+  captionYPosInput.addEventListener('input', (e) => { yPosVal.textContent = parseFloat(e.target.value).toFixed(2); });
+  captionColorPicker.addEventListener('input', (e) => { captionColorText.value = e.target.value; });
+  captionColorText.addEventListener('input', (e) => { if (e.target.value.startsWith('#') && e.target.value.length === 7) captionColorPicker.value = e.target.value; });
   advToggle.addEventListener('click', () => {
     advToggle.classList.toggle('active');
     advBody.style.display = advToggle.classList.contains('active') ? 'block' : 'none';
   });
 
-  // Toggle Z Image API Group
-  useZImageToggle.addEventListener('change', (e) => {
-    zImageKeyGroup.style.display = e.target.checked ? 'block' : 'none';
-  });
-
-  // ── 3. Drag & Drop CSV Logic ────────────────────────────────
+  // ═══════════════════════════════════════════════════════════
+  // 4. CSV DRAG & DROP
+  // ═══════════════════════════════════════════════════════════
   dropZone.addEventListener('click', () => csvFileInput.click());
-
-  csvFileInput.addEventListener('change', (e) => {
-    if (e.target.files.length > 0) {
-      handleFileSelected(e.target.files[0]);
-    }
-  });
-
-  dropZone.addEventListener('dragover', (e) => {
-    e.preventDefault();
-    dropZone.classList.add('dragover');
-  });
-
-  dropZone.addEventListener('dragleave', () => {
-    dropZone.classList.remove('dragover');
-  });
-
+  csvFileInput.addEventListener('change', (e) => { if (e.target.files.length > 0) handleFileSelected(e.target.files[0]); });
+  dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('dragover'); });
+  dropZone.addEventListener('dragleave', () => { dropZone.classList.remove('dragover'); });
   dropZone.addEventListener('drop', (e) => {
     e.preventDefault();
     dropZone.classList.remove('dragover');
     if (e.dataTransfer.files.length > 0) {
       const file = e.dataTransfer.files[0];
-      if (file.name.endsWith('.csv')) {
-        csvFileInput.files = e.dataTransfer.files;
-        handleFileSelected(file);
-      } else {
-        addLogLine('[ERROR] Invalid file type. Only CSV files are accepted.', 'error');
-      }
+      if (file.name.endsWith('.csv')) { csvFileInput.files = e.dataTransfer.files; handleFileSelected(file); }
+      else addLogLine('[ERROR] Invalid file type. Only CSV files are accepted.', 'error');
     }
   });
 
@@ -257,47 +226,46 @@ document.addEventListener('DOMContentLoaded', () => {
     selectedFileName.textContent = file.name;
     selectedFileSize.textContent = (file.size / 1024).toFixed(1) + ' KB';
     selectedFileDetails.style.display = 'inline-flex';
-    addLogLine(`[SYSTEM] Loaded CSV script: ${file.name} (${(file.size / 1024).toFixed(1)} KB)`);
+    addLogLine(`[SYSTEM] Loaded CSV script: ${file.name} (${(file.size / 1024).toFixed(1)} KB)`, 'system');
   };
 
-  // ── 4. Log Helper ───────────────────────────────────────────
+  // ═══════════════════════════════════════════════════════════
+  // 5. LOG HELPER (persists to localStorage)
+  // ═══════════════════════════════════════════════════════════
   const addLogLine = (text, type = '') => {
     const line = document.createElement('div');
     line.className = `log-line ${type}`;
-    // Timestamp
     const time = new Date().toLocaleTimeString();
     line.innerHTML = `<span style="color: var(--text-muted)">[${time}]</span> ${text}`;
     consoleOutput.appendChild(line);
     consoleOutput.scrollTop = consoleOutput.scrollHeight;
+
+    // Persist log lines for active job
+    const activeJob = localStorage.getItem('active_job_id');
+    if (activeJob) {
+      let logs = [];
+      try { logs = JSON.parse(localStorage.getItem('active_job_logs') || '[]'); } catch (e) {}
+      logs.push({ text, type, time });
+      localStorage.setItem('active_job_logs', JSON.stringify(logs));
+    }
   };
 
-  clearLogsBtn.addEventListener('click', () => {
-    consoleOutput.innerHTML = '';
-  });
+  clearLogsBtn.addEventListener('click', () => { consoleOutput.innerHTML = ''; });
 
-  // ── 5. Trigger Pipeline Execution ──────────────────────────
+  // ═══════════════════════════════════════════════════════════
+  // 6. PIPELINE TRIGGER
+  // ═══════════════════════════════════════════════════════════
   triggerPipelineBtn.addEventListener('click', () => {
-    if (!selectedFile) {
-      alert('Please upload a script CSV file first.');
-      return;
-    }
-
+    if (!selectedFile) { alert('Please upload a script CSV file first.'); return; }
     const username = kaggleUsernameInput.value.trim();
     const key = kaggleKeyInput.value.trim();
-    if (!username || !key) {
-      alert('Please input your Kaggle username and API key.');
-      return;
-    }
+    if (!username || !key) { alert('Please input your Kaggle username and API key in the Credentials tab.'); return; }
 
-    // Disable triggers
     setPipelineRunning(true);
     outputCard.style.display = 'none';
-
-    // Clear and reset status
     consoleOutput.innerHTML = '';
     addLogLine('[SYSTEM] Preparing video automation payload...', 'system');
-    
-    // Prepare Multi-part Form Payload
+
     const formData = new FormData();
     formData.append('csvFile', selectedFile);
     formData.append('aspect_ratio', aspectRatioSelect.value);
@@ -314,20 +282,19 @@ document.addEventListener('DOMContentLoaded', () => {
     formData.append('use_z_image', useZImageToggle.checked ? 'true' : 'false');
     formData.append('z_image_key', zImageKeyInput.value.trim());
 
-    // Call backend trigger route
-    fetch(getApiUrl('/api/trigger'), {
-      method: 'POST',
-      body: formData
-    })
+    fetch(getApiUrl('/api/trigger'), { method: 'POST', body: formData })
     .then(async (res) => {
       const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || 'Failed to start execution.');
-      }
+      if (!res.ok) throw new Error(data.error || 'Failed to start execution.');
       return data;
     })
     .then((data) => {
       addLogLine(`[SUCCESS] Kaggle run triggered! Job ID: ${data.jobId}`, 'success');
+      // Persist active job state
+      localStorage.setItem('active_job_id', data.jobId);
+      localStorage.setItem('active_job_start', Date.now().toString());
+      localStorage.setItem('active_job_logs', '[]');
+      localStorage.setItem('active_job_status', 'queued');
       startPolling(data.jobId);
     })
     .catch((err) => {
@@ -336,29 +303,28 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
-  // Toggle running states in UI
+  // ═══════════════════════════════════════════════════════════
+  // 7. PIPELINE STATE MANAGEMENT (survives refresh)
+  // ═══════════════════════════════════════════════════════════
   const setPipelineRunning = (isRunning) => {
     triggerPipelineBtn.disabled = isRunning;
     csvFileInput.disabled = isRunning;
-    aspectRatioSelect.disabled = isRunning;
-    kokoroVoiceSelect.disabled = isRunning;
-    videoSpeedInput.disabled = isRunning;
-    captionEnabledCheckbox.disabled = isRunning;
-    
+
     if (isRunning) {
       btnText.textContent = 'Pipeline Active...';
       spinner.style.display = 'inline-block';
       progressContainer.style.display = 'flex';
       updateProgress(5, 'Triggering run...');
-      
-      // Start Elapsed Timer
-      elapsedSeconds = 0;
-      elapsedTimerText.textContent = '0s';
+
+      // Start elapsed timer from stored start or now
+      const startTime = parseInt(localStorage.getItem('active_job_start') || Date.now());
+      elapsedSeconds = Math.floor((Date.now() - startTime) / 1000);
+      updateElapsedDisplay();
+
+      if (elapsedTimer) clearInterval(elapsedTimer);
       elapsedTimer = setInterval(() => {
         elapsedSeconds++;
-        const mins = Math.floor(elapsedSeconds / 60);
-        const secs = elapsedSeconds % 60;
-        elapsedTimerText.textContent = mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
+        updateElapsedDisplay();
       }, 1000);
     } else {
       btnText.textContent = 'Generate Video on Kaggle';
@@ -367,251 +333,291 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   };
 
-  // Update Progress Track
+  const updateElapsedDisplay = () => {
+    const mins = Math.floor(elapsedSeconds / 60);
+    const secs = elapsedSeconds % 60;
+    elapsedTimerText.textContent = mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
+  };
+
   const updateProgress = (pct, stage) => {
     progressFill.style.width = `${pct}%`;
     progressStage.textContent = stage;
+    // Persist
+    localStorage.setItem('active_job_progress', JSON.stringify({ pct, stage }));
   };
 
-  // Update Status Indicator Box
   const updateStatusIndicator = (status) => {
-    // Reset classes
     statusIndicator.className = 'status-indicator ' + status;
     statusText.textContent = status;
+    localStorage.setItem('active_job_status', status);
   };
 
-  // ── 6. Status Polling Loop ──────────────────────────────────
+  // ═══════════════════════════════════════════════════════════
+  // 8. STATUS POLLING LOOP
+  // ═══════════════════════════════════════════════════════════
   const startPolling = (jobId) => {
     if (pollingInterval) clearInterval(pollingInterval);
     updateStatusIndicator('queued');
 
+    let lastLogCount = 0;
+    // Fast-forward logs if resuming
+    try {
+        let savedLogs = JSON.parse(localStorage.getItem('active_job_logs') || '[]');
+        lastLogCount = savedLogs.length;
+    } catch(e) {}
+
     pollingInterval = setInterval(() => {
       fetch(getApiUrl(`/api/status/${jobId}`))
-        .then(res => res.json())
+        .then(async res => {
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || 'Server error');
+          return data;
+        })
         .then(data => {
-          // Sync Logs (only log new lines)
-          const currentLogLines = consoleOutput.querySelectorAll('.log-line').length;
-          if (data.log && data.log.length > currentLogLines) {
-            for (let i = currentLogLines; i < data.log.length; i++) {
+          // Sync logs (only add new lines)
+          if (data.log && data.log.length > lastLogCount) {
+            for (let i = lastLogCount; i < data.log.length; i++) {
               const line = data.log[i];
-              if (line.includes('[SUCCESS]')) {
-                addLogLine(line, 'success');
-              } else if (line.includes('[ERROR]')) {
-                addLogLine(line, 'error');
-              } else if (line.includes('[INFO]') || line.includes('[WARN]')) {
-                addLogLine(line, 'system');
-              } else {
-                addLogLine(line);
-              }
+              let type = '';
+              if (line.includes('[SUCCESS]')) type = 'success';
+              else if (line.includes('[ERROR]')) type = 'error';
+              else if (line.includes('[INFO]') || line.includes('[WARN]')) type = 'system';
+              addLogLine(line, type);
             }
+            lastLogCount = data.log.length;
           }
 
-          // Handle stages/progress updates
+          // Status transitions
           if (data.status === 'queued') {
             updateStatusIndicator('queued');
             updateProgress(15, 'Queued in Kaggle background pipeline...');
           } else if (data.status === 'running') {
             updateStatusIndicator('running');
-            
-            // Guess progress from log contents
-            let pct = 30;
-            let msg = 'Rendering video assets on GPU (Flux)...';
-            
+            let pct = 30, msg = 'Rendering video assets on GPU...';
             const logStr = data.log.join('\n');
-            if (logStr.includes('PHASE 2:')) {
-              pct = 50;
-              msg = 'Generating expression voices (Kokoro TTS)...';
-            }
-            if (logStr.includes('PHASE 3:')) {
-              pct = 70;
-              msg = 'Burning captions and camera motion (FFmpeg)...';
-            }
-            if (logStr.includes('PHASE 4:')) {
-              pct = 85;
-              msg = 'Stitching voice and video timelines (FFmpeg)...';
-            }
-            if (logStr.includes('PHASE 5:')) {
-              pct = 95;
-              msg = 'Mixing background music and exporting (FFmpeg)...';
-            }
+            if (logStr.includes('PHASE 2:')) { pct = 50; msg = 'Generating voices (Kokoro TTS)...'; }
+            if (logStr.includes('PHASE 3:')) { pct = 70; msg = 'Burning captions + motion (FFmpeg)...'; }
+            if (logStr.includes('PHASE 4:')) { pct = 85; msg = 'Stitching voice + video (FFmpeg)...'; }
+            if (logStr.includes('PHASE 5:')) { pct = 95; msg = 'Mixing BGM and exporting (FFmpeg)...'; }
             updateProgress(pct, msg);
           } else if (data.status === 'downloading') {
             updateStatusIndicator('downloading');
-            updateProgress(98, 'Downloading final MP4 video from Kaggle...');
+            updateProgress(98, 'Downloading final MP4 from Kaggle...');
           } else if (data.status === 'complete') {
             updateStatusIndicator('complete');
             updateProgress(100, 'Video Render Complete!');
             clearInterval(pollingInterval);
+            pollingInterval = null;
             setPipelineRunning(false);
-            
-            // Present video output
             showOutputVideo(data.videoUrl, data.aspectRatio);
-            
-            // Add to Render History
-            saveToHistory(data.videoUrl, data.aspectRatio, jobId);
+            saveToHistory(data.videoUrl, data.aspectRatio, jobId, 'success');
+            clearActiveJob();
           } else if (data.status === 'error') {
             updateStatusIndicator('error');
             updateProgress(100, 'Pipeline Error!');
             clearInterval(pollingInterval);
+            pollingInterval = null;
             setPipelineRunning(false);
             addLogLine('[ERROR] The background Kaggle execution failed.', 'error');
+            saveToHistory(null, null, jobId, 'failed');
+            clearActiveJob();
           }
         })
         .catch(err => {
           console.error('Polling error:', err);
+          if (err.message.includes('not found') || err.message.includes('Server error')) {
+            updateStatusIndicator('error');
+            updateProgress(100, 'Job not found / Cancelled.');
+            clearInterval(pollingInterval);
+            pollingInterval = null;
+            setPipelineRunning(false);
+            addLogLine('[ERROR] The job was cancelled or no longer exists.', 'error');
+            saveToHistory(null, null, jobId, 'failed');
+            clearActiveJob();
+          }
         });
-    }, 5000); // Poll every 5s
+    }, 5000);
   };
 
-  // ── 7. Output Display & Video Inject ────────────────────────
+  const clearActiveJob = () => {
+    localStorage.removeItem('active_job_id');
+    localStorage.removeItem('active_job_start');
+    localStorage.removeItem('active_job_logs');
+    localStorage.removeItem('active_job_status');
+    localStorage.removeItem('active_job_progress');
+  };
+
+  // ═══════════════════════════════════════════════════════════
+  // 9. RESUME ACTIVE JOB ON PAGE LOAD
+  // ═══════════════════════════════════════════════════════════
+  const resumeActiveJob = () => {
+    const activeJobId = localStorage.getItem('active_job_id');
+    if (!activeJobId) return;
+
+    const activeStatus = localStorage.getItem('active_job_status');
+    if (activeStatus === 'complete' || activeStatus === 'error') {
+      clearActiveJob();
+      return;
+    }
+
+    // Restore UI state
+    consoleOutput.innerHTML = '';
+
+    // Restore saved logs
+    let savedLogs = [];
+    try { savedLogs = JSON.parse(localStorage.getItem('active_job_logs') || '[]'); } catch (e) {}
+    savedLogs.forEach(entry => {
+      const line = document.createElement('div');
+      line.className = `log-line ${entry.type || ''}`;
+      line.innerHTML = `<span style="color: var(--text-muted)">[${entry.time}]</span> ${entry.text}`;
+      consoleOutput.appendChild(line);
+    });
+    consoleOutput.scrollTop = consoleOutput.scrollHeight;
+
+    // Restore progress
+    let savedProgress = { pct: 15, stage: 'Resuming...' };
+    try { savedProgress = JSON.parse(localStorage.getItem('active_job_progress') || '{}'); } catch (e) {}
+
+    // Switch to execution tab and show running state
+    switchTab('execution');
+    setPipelineRunning(true);
+    updateStatusIndicator(activeStatus || 'running');
+    updateProgress(savedProgress.pct || 15, savedProgress.stage || 'Resuming pipeline monitoring...');
+
+    // Restart polling
+    startPolling(activeJobId);
+  };
+
+  resumeActiveJob();
+
+  // ═══════════════════════════════════════════════════════════
+  // 10. OUTPUT VIDEO DISPLAY
+  // ═══════════════════════════════════════════════════════════
   const showOutputVideo = (videoUrl, aspectRatio) => {
-    // Determine preview aspect ratio styles
     const isVertical = aspectRatio === '9:16';
     videoPreviewContainer.className = 'video-preview-wrapper' + (isVertical ? ' vertical' : '');
 
-    // Inject video tag
     const backendUrl = backendUrlInput ? backendUrlInput.value.trim().replace(/\/$/, '') : '';
     const fullVideoUrl = backendUrl ? `${backendUrl}${videoUrl}` : (window.location.origin + videoUrl);
-    
-    videoPreviewContainer.innerHTML = `
-      <video controls>
-        <source src="${fullVideoUrl}" type="video/mp4">
-        Your browser does not support the video tag.
-      </video>
-    `;
 
-    // Configure download buttons
+    videoPreviewContainer.innerHTML = `<video controls><source src="${fullVideoUrl}" type="video/mp4">Your browser does not support the video tag.</video>`;
+
     downloadVideoBtn.href = fullVideoUrl;
     downloadVideoBtn.setAttribute('download', `final_video_${aspectRatio.replace(':', '_')}.mp4`);
-    
-    // Add client-side blob download logic to bypass cross-origin restrictions on the 'download' attribute
+
     downloadVideoBtn.onclick = (e) => {
       e.preventDefault();
-      
-      const btnTextSpan = downloadVideoBtn.querySelector('span');
-      const originalText = btnTextSpan.textContent;
-      btnTextSpan.textContent = 'Downloading to browser...';
+      const btnSpan = downloadVideoBtn.querySelector('span');
+      const orig = btnSpan.textContent;
+      btnSpan.textContent = 'Downloading...';
       downloadVideoBtn.style.pointerEvents = 'none';
       downloadVideoBtn.style.opacity = '0.7';
 
-      addLogLine(`[SYSTEM] Starting direct video file download...`, 'system');
-
       fetch(fullVideoUrl)
-        .then(response => {
-          if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-          return response.blob();
-        })
+        .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.blob(); })
         .then(blob => {
-          const blobUrl = window.URL.createObjectURL(blob);
           const a = document.createElement('a');
-          a.style.display = 'none';
-          a.href = blobUrl;
+          a.href = URL.createObjectURL(blob);
           a.download = `final_video_${aspectRatio.replace(':', '_')}.mp4`;
-          document.body.appendChild(a);
           a.click();
-          window.URL.revokeObjectURL(blobUrl);
-          document.body.removeChild(a);
-          addLogLine(`[SUCCESS] Video download complete!`, 'success');
+          URL.revokeObjectURL(a.href);
         })
-        .catch(err => {
-          console.error('Download fetch failed, falling back to direct link:', err);
-          addLogLine(`[WARN] Download fetch failed: ${err.message}. Opening file in new tab instead.`, 'system');
-          // Fallback: open in new tab
-          window.open(fullVideoUrl, '_blank');
-        })
-        .finally(() => {
-          btnTextSpan.textContent = originalText;
-          downloadVideoBtn.style.pointerEvents = 'auto';
-          downloadVideoBtn.style.opacity = '1';
-        });
+        .catch(() => window.open(fullVideoUrl, '_blank'))
+        .finally(() => { btnSpan.textContent = orig; downloadVideoBtn.style.pointerEvents = 'auto'; downloadVideoBtn.style.opacity = '1'; });
     };
 
-    // Setup Copy URL Button
     copyLinkBtn.onclick = () => {
-      navigator.clipboard.writeText(fullVideoUrl)
-        .then(() => {
-          linkCopiedMsg.style.display = 'block';
-          copyBtnText.textContent = 'Copied!';
-          setTimeout(() => {
-            linkCopiedMsg.style.display = 'none';
-            copyBtnText.textContent = 'Copy Download Link';
-          }, 3000);
-        })
-        .catch(err => {
-          console.error('Failed to copy link:', err);
-          alert('Failed to copy link. You can download it directly instead.');
-        });
+      navigator.clipboard.writeText(fullVideoUrl).then(() => {
+        linkCopiedMsg.style.display = 'block';
+        copyBtnText.textContent = 'Copied!';
+        setTimeout(() => { linkCopiedMsg.style.display = 'none'; copyBtnText.textContent = 'Copy Download Link'; }, 3000);
+      }).catch(() => alert('Failed to copy link.'));
     };
 
     outputCard.style.display = 'block';
     outputCard.scrollIntoView({ behavior: 'smooth' });
   };
 
-  // ── 8. Render History / Log Page ────────────────────────────
+  // ═══════════════════════════════════════════════════════════
+  // 11. RENDER HISTORY (persists in localStorage)
+  // ═══════════════════════════════════════════════════════════
   const loadHistory = () => {
-    const historyJson = localStorage.getItem('render_history');
-    if (!historyJson) return;
-    
     let history = [];
-    try {
-      history = JSON.parse(historyJson);
-    } catch (e) {
-      console.error('Failed to parse history:', e);
+    try { history = JSON.parse(localStorage.getItem('render_history') || '[]'); } catch (e) {}
+
+    // Update log badge count
+    if (history.length > 0) {
+      logBadge.style.display = 'inline-flex';
+      logBadge.textContent = history.length;
+    } else {
+      logBadge.style.display = 'none';
+    }
+
+    if (history.length === 0) {
+      historyList.innerHTML = `
+        <div class="history-empty">
+          <span class="history-empty-icon">📭</span>
+          <p>No completed renders yet.</p>
+          <p class="helper-small">Completed and failed jobs will appear here with download links.</p>
+        </div>`;
       return;
     }
 
-    if (history.length > 0) {
-      historyList.innerHTML = '';
-      history.slice().reverse().forEach(item => {
-        const div = document.createElement('div');
-        div.className = 'history-item';
-        div.style.background = 'rgba(0,0,0,0.2)';
-        div.style.padding = '10px';
-        div.style.marginBottom = '10px';
-        div.style.borderRadius = '6px';
-        div.style.display = 'flex';
-        div.style.justifyContent = 'space-between';
-        div.style.alignItems = 'center';
+    historyList.innerHTML = '';
+    history.slice().reverse().forEach(item => {
+      const div = document.createElement('div');
+      div.className = 'history-item';
 
-        const backendUrl = backendUrlInput ? backendUrlInput.value.trim().replace(/\/$/, '') : '';
-        const fullUrl = backendUrl ? `${backendUrl}${item.url}` : (window.location.origin + item.url);
+      const backendUrl = backendUrlInput ? backendUrlInput.value.trim().replace(/\/$/, '') : '';
+      const fullUrl = item.url ? (backendUrl ? `${backendUrl}${item.url}` : (window.location.origin + item.url)) : null;
 
-        div.innerHTML = `
-          <div>
-            <strong>${new Date(item.timestamp).toLocaleString()}</strong><br>
-            <span style="color: var(--text-muted); font-size: 0.85rem;">Job: ${item.jobId} | Ratio: ${item.ratio}</span>
+      const statusClass = item.status === 'success' ? 'success' : 'failed';
+      const statusLabel = item.status === 'success' ? '✓ Success' : '✗ Failed';
+
+      let actionsHtml = '';
+      if (fullUrl) {
+        actionsHtml = `
+          <div class="hist-actions">
+            <a href="${fullUrl}" target="_blank" class="btn secondary-btn">View</a>
+            <button class="btn secondary-btn hist-copy-btn" data-url="${fullUrl}">Copy</button>
+          </div>`;
+      }
+
+      div.innerHTML = `
+        <div class="hist-info">
+          <strong>${new Date(item.timestamp).toLocaleString()}</strong>
+          <div class="hist-meta">
+            <span class="hist-status ${statusClass}">${statusLabel}</span>
+            <span>Job: ${item.jobId}</span>
+            ${item.ratio ? `<span>Ratio: ${item.ratio}</span>` : ''}
           </div>
-          <div>
-            <a href="${fullUrl}" target="_blank" class="btn secondary-btn" style="padding: 5px 10px; font-size: 0.85rem; margin-right: 5px;">View</a>
-            <button class="btn secondary-btn" onclick="navigator.clipboard.writeText('${fullUrl}').then(() => alert('Copied!'))" style="padding: 5px 10px; font-size: 0.85rem;">Copy Link</button>
-          </div>
-        `;
-        historyList.appendChild(div);
-      });
+        </div>
+        ${actionsHtml}`;
 
-      // Bind copy buttons
-      document.querySelectorAll('.copy-hist-btn').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-          navigator.clipboard.writeText(e.target.getAttribute('data-url')).then(() => {
-            const original = e.target.textContent;
-            e.target.textContent = 'Copied!';
-            setTimeout(() => e.target.textContent = original, 2000);
-          });
+      historyList.appendChild(div);
+    });
+
+    // Bind copy buttons
+    document.querySelectorAll('.hist-copy-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        navigator.clipboard.writeText(btn.dataset.url).then(() => {
+          const orig = btn.textContent;
+          btn.textContent = 'Copied!';
+          setTimeout(() => btn.textContent = orig, 2000);
         });
       });
-    }
+    });
   };
 
-  const saveToHistory = (url, ratio, jobId) => {
+  const saveToHistory = (url, ratio, jobId, status) => {
     let history = [];
-    try {
-      history = JSON.parse(localStorage.getItem('render_history')) || [];
-    } catch (e) {}
+    try { history = JSON.parse(localStorage.getItem('render_history') || '[]'); } catch (e) {}
 
     history.push({
       url: url,
       ratio: ratio,
       jobId: jobId,
+      status: status,
       timestamp: Date.now()
     });
 
@@ -619,6 +625,13 @@ document.addEventListener('DOMContentLoaded', () => {
     loadHistory();
   };
 
-  // Initial load of history
+  clearHistoryBtn.addEventListener('click', () => {
+    if (confirm('Clear all render history?')) {
+      localStorage.removeItem('render_history');
+      loadHistory();
+    }
+  });
+
+  // Initial load
   loadHistory();
 });

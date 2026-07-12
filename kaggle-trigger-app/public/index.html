@@ -20,15 +20,34 @@
       <p class="tagline">Hugging Face Space Control Center • Kaggle T4 Pipeline Trigger</p>
     </header>
 
-    <main class="app-grid">
-      <!-- Left Column: Setup & Inputs -->
-      <section class="control-panel">
-        
-        <!-- Section 1: Kaggle Credentials Setup -->
-        <div class="card glass-card" id="creds-card">
+    <!-- ═══ Tab Navigation ═══ -->
+    <nav class="tab-bar" id="tab-bar">
+      <button class="tab-btn active" data-tab="credentials">
+        <span class="tab-icon">🔑</span>
+        <span class="tab-label">Credentials</span>
+      </button>
+      <button class="tab-btn" data-tab="execution">
+        <span class="tab-icon">⚡</span>
+        <span class="tab-label">Execution</span>
+      </button>
+      <button class="tab-btn" data-tab="logs">
+        <span class="tab-icon">📋</span>
+        <span class="tab-label">Logs</span>
+        <span class="log-badge" id="log-badge" style="display:none;">0</span>
+      </button>
+    </nav>
+
+    <!-- ═══════════════════════════════════════════════════════════
+         TAB 1: CREDENTIALS
+         ═══════════════════════════════════════════════════════════ -->
+    <section class="tab-content active" id="tab-credentials">
+      <div class="tab-panel">
+
+        <!-- Kaggle Credentials -->
+        <div class="card glass-card">
           <div class="card-header">
-            <span class="badge">1</span>
-            <h2>Kaggle & API Authentication</h2>
+            <span class="badge-icon">🏔️</span>
+            <h2>Kaggle Authentication</h2>
           </div>
           <div class="card-body">
             <div class="helper-text">
@@ -40,233 +59,270 @@
                 <li>Open the downloaded <code>kaggle.json</code> to find your username and key.</li>
               </ol>
             </div>
-            
-            <div class="input-group">
-              <label for="kaggle-username">Kaggle Username</label>
-              <input type="text" id="kaggle-username" placeholder="e.g., ikechukwuebiringa1">
-            </div>
-            
-            <div class="input-group">
-              <label for="kaggle-key">Kaggle API Key</label>
-              <input type="password" id="kaggle-key" placeholder="Paste your Kaggle API Key / Token here">
-            </div>
-
-            <div class="input-group">
-              <label for="hf-token">HuggingFace Token Override (Optional)</label>
-              <input type="password" id="hf-token" placeholder="hf_... (Defaults to pre-configured token)">
-            </div>
-
-            <div class="input-group">
-              <label for="backend-url">Backend API URL (Optional)</label>
-              <input type="text" id="backend-url" value="" placeholder="e.g., https://username-space-name.hf.space (Default: same host)">
-            </div>
-            
-            <div class="auth-buttons">
-              <button class="btn secondary-btn" id="save-creds-btn">Save Authentications</button>
-              <button class="btn secondary-btn" id="test-creds-btn" style="background: linear-gradient(135deg, rgba(255,255,255,0.1), rgba(255,255,255,0.05)); border: 1px solid rgba(255, 255, 255, 0.2);">Test Connection</button>
-            </div>
-            <div class="success-message" id="creds-saved-msg">✓ Credentials saved locally in your browser!</div>
-            <div class="status-message" id="creds-test-msg" style="display: none; margin-top: 10px; padding: 10px; border-radius: 6px; font-size: 0.9rem;"></div>
-          </div>
-        </div>
-
-        <!-- Section 2: CSV Upload -->
-        <div class="card glass-card">
-          <div class="card-header">
-            <span class="badge">2</span>
-            <h2>Upload Script CSV</h2>
-          </div>
-          <div class="card-body">
-            <div class="upload-zone" id="drop-zone">
-              <input type="file" id="csv-file-input" accept=".csv" style="display: none;">
-              <div class="upload-icon">📄</div>
-              <p class="upload-title">Drag & Drop your True Crime CSV here</p>
-              <p class="upload-subtitle">or click to browse from files</p>
-              <div class="file-details" id="selected-file-details" style="display: none;">
-                <span class="file-name" id="selected-file-name">file.csv</span>
-                <span class="file-size" id="selected-file-size">0 KB</span>
+            <div class="input-grid">
+              <div class="input-group">
+                <label for="kaggle-username">Kaggle Username</label>
+                <input type="text" id="kaggle-username" placeholder="e.g., ikechukwuebiringa1">
+              </div>
+              <div class="input-group">
+                <label for="kaggle-key">Kaggle API Key</label>
+                <input type="password" id="kaggle-key" placeholder="Paste your Kaggle API Key here">
               </div>
             </div>
+            <div class="auth-buttons">
+              <button class="btn secondary-btn" id="save-creds-btn">
+                <span>💾</span> Save All Credentials
+              </button>
+              <button class="btn secondary-btn test-btn" id="test-creds-btn">
+                <span>🔌</span> Test Kaggle Connection
+              </button>
+            </div>
+            <div class="success-message" id="creds-saved-msg">✓ All credentials saved locally in your browser!</div>
+            <div class="status-message" id="creds-test-msg" style="display: none;"></div>
           </div>
         </div>
 
-        <!-- Section 3: Video Settings -->
+        <!-- HuggingFace & Backend -->
         <div class="card glass-card">
           <div class="card-header">
-            <span class="badge">3</span>
-            <h2>Configuration Parameters</h2>
+            <span class="badge-icon">🤗</span>
+            <h2>HuggingFace & Backend</h2>
           </div>
           <div class="card-body">
             <div class="input-grid">
               <div class="input-group">
-                <label for="aspect-ratio">Aspect Ratio</label>
-                <select id="aspect-ratio">
-                  <option value="16:9">Horizontal (16:9)</option>
-                  <option value="9:16">Vertical / Shorts (9:16)</option>
-                </select>
+                <label for="hf-token">HuggingFace Token Override <span class="optional">(Optional)</span></label>
+                <input type="password" id="hf-token" placeholder="hf_... (Defaults to pre-configured token)">
               </div>
-
               <div class="input-group">
-                <label for="kokoro-voice">Voice Model</label>
-                <select id="kokoro-voice">
-                  <option value="am_michael">am_michael (Energetic male - Default)</option>
-                  <option value="am_echo">am_echo (Vibrant male)</option>
-                  <option value="am_onyx">am_onyx (Vibrant male)</option>
-                  <option value="af_heart">af_heart (Vibrant female)</option>
-                  <option value="af_nova">af_nova (Expressive female)</option>
-                  <option value="af_sky">af_sky (Vibrant female)</option>
-                  <option value="af_bella">af_bella (Vibrant female)</option>
-                </select>
-              </div>
-
-              <div class="input-group">
-                <label for="video-speed">Video Speed (Multiplier)</label>
-                <div class="range-display">
-                  <input type="range" id="video-speed" min="0.5" max="2.0" step="0.05" value="1.1">
-                  <span class="val-lbl" id="speed-val">1.1x</span>
-                </div>
-              </div>
-
-              <div class="input-group checkbox-group">
-                <input type="checkbox" id="caption-enabled" checked>
-                <label for="caption-enabled">Burn Video Captions</label>
-              </div>
-
-              <div class="input-group checkbox-group" style="grid-column: 1 / -1; margin-top: 10px;">
-                <input type="checkbox" id="use-z-image">
-                <label for="use-z-image">Use Paid Z Image API (kie.ai) instead of Flux</label>
-              </div>
-
-              <div class="input-group" id="z-image-key-group" style="display: none; grid-column: 1 / -1;">
-                <label for="z-image-key">Z Image API Key (kie.ai)</label>
-                <input type="password" id="z-image-key" placeholder="Enter your kie.ai Bearer Token">
+                <label for="backend-url">Backend API URL <span class="optional">(Optional)</span></label>
+                <input type="text" id="backend-url" value="" placeholder="e.g., https://username-space.hf.space">
               </div>
             </div>
+          </div>
+        </div>
 
-            <!-- Advanced caption options (toggle-able or just visible) -->
-            <div class="advanced-settings-header" id="adv-toggle">
-              <span>Advanced Caption Options</span>
-              <span class="arrow">▼</span>
+        <!-- Z Image API -->
+        <div class="card glass-card">
+          <div class="card-header">
+            <span class="badge-icon">🎨</span>
+            <h2>Z Image API (kie.ai)</h2>
+          </div>
+          <div class="card-body">
+            <div class="input-group checkbox-group">
+              <input type="checkbox" id="use-z-image">
+              <label for="use-z-image">Use Paid Z Image API instead of Flux</label>
             </div>
-            
-            <div class="advanced-settings-body" id="adv-body" style="display: none;">
-              <div class="input-grid">
-                <div class="input-group">
-                  <label for="caption-font-size">Font Size (px)</label>
-                  <input type="number" id="caption-font-size" value="22" min="10" max="150">
-                </div>
+            <div class="input-group" id="z-image-key-group" style="display: none;">
+              <label for="z-image-key">Z Image Bearer Token</label>
+              <input type="password" id="z-image-key" placeholder="Paste your kie.ai Bearer Token here">
+            </div>
+            <p class="helper-small">When enabled, images are generated via kie.ai's Z Image model instead of Flux.1-Schnell on Kaggle GPU.</p>
+          </div>
+        </div>
 
-                <div class="input-group">
-                  <label for="caption-color">Caption Color</label>
-                  <div class="color-picker-wrapper">
-                    <input type="color" id="caption-color-picker" value="#ffffff">
-                    <input type="text" id="caption-color-text" value="white">
-                  </div>
-                </div>
+      </div>
+    </section>
 
-                <div class="input-group">
-                  <label for="caption-outline">Outline Width (px)</label>
-                  <input type="number" id="caption-outline" value="4" min="0" max="20">
-                </div>
+    <!-- ═══════════════════════════════════════════════════════════
+         TAB 2: EXECUTION
+         ═══════════════════════════════════════════════════════════ -->
+    <section class="tab-content" id="tab-execution">
+      <div class="tab-panel">
+        <div class="exec-grid">
 
-                <div class="input-group">
-                  <label for="caption-y-pos">Vertical Position (Y-ratio)</label>
-                  <div class="range-display">
-                    <input type="range" id="caption-y-pos" min="0.0" max="1.0" step="0.05" value="0.80">
-                    <span class="val-lbl" id="y-pos-val">0.80</span>
+          <!-- Left: Config -->
+          <div class="exec-config">
+
+            <!-- CSV Upload -->
+            <div class="card glass-card">
+              <div class="card-header">
+                <span class="badge">1</span>
+                <h2>Upload Script CSV</h2>
+              </div>
+              <div class="card-body">
+                <div class="upload-zone" id="drop-zone">
+                  <input type="file" id="csv-file-input" accept=".csv" style="display: none;">
+                  <div class="upload-icon">📄</div>
+                  <p class="upload-title">Drag & Drop your True Crime CSV here</p>
+                  <p class="upload-subtitle">or click to browse from files</p>
+                  <div class="file-details" id="selected-file-details" style="display: none;">
+                    <span class="file-name" id="selected-file-name">file.csv</span>
+                    <span class="file-size" id="selected-file-size">0 KB</span>
                   </div>
                 </div>
               </div>
             </div>
 
-            <button class="btn primary-btn" id="trigger-pipeline-btn">
-              <span class="btn-text">Generate Video on Kaggle</span>
-              <span class="spinner" style="display: none;"></span>
-            </button>
+            <!-- Configuration Parameters -->
+            <div class="card glass-card">
+              <div class="card-header">
+                <span class="badge">2</span>
+                <h2>Configuration Parameters</h2>
+              </div>
+              <div class="card-body">
+                <div class="input-grid">
+                  <div class="input-group">
+                    <label for="aspect-ratio">Aspect Ratio</label>
+                    <select id="aspect-ratio">
+                      <option value="16:9">Horizontal (16:9)</option>
+                      <option value="9:16">Vertical / Shorts (9:16)</option>
+                    </select>
+                  </div>
+                  <div class="input-group">
+                    <label for="kokoro-voice">Voice Model</label>
+                    <select id="kokoro-voice">
+                      <option value="am_michael">am_michael (Energetic male - Default)</option>
+                      <option value="am_echo">am_echo (Vibrant male)</option>
+                      <option value="am_onyx">am_onyx (Vibrant male)</option>
+                      <option value="af_heart">af_heart (Vibrant female)</option>
+                      <option value="af_nova">af_nova (Expressive female)</option>
+                      <option value="af_sky">af_sky (Vibrant female)</option>
+                      <option value="af_bella">af_bella (Vibrant female)</option>
+                    </select>
+                  </div>
+                  <div class="input-group">
+                    <label for="video-speed">Video Speed (Multiplier)</label>
+                    <div class="range-display">
+                      <input type="range" id="video-speed" min="0.5" max="2.0" step="0.05" value="1.1">
+                      <span class="val-lbl" id="speed-val">1.1x</span>
+                    </div>
+                  </div>
+                  <div class="input-group checkbox-group">
+                    <input type="checkbox" id="caption-enabled" checked>
+                    <label for="caption-enabled">Burn Video Captions</label>
+                  </div>
+                </div>
+
+                <!-- Advanced Caption Options -->
+                <div class="advanced-settings-header" id="adv-toggle">
+                  <span>Advanced Caption Options</span>
+                  <span class="arrow">▼</span>
+                </div>
+                <div class="advanced-settings-body" id="adv-body" style="display: none;">
+                  <div class="input-grid">
+                    <div class="input-group">
+                      <label for="caption-font-size">Font Size (px)</label>
+                      <input type="number" id="caption-font-size" value="22" min="10" max="150">
+                    </div>
+                    <div class="input-group">
+                      <label for="caption-color">Caption Color</label>
+                      <div class="color-picker-wrapper">
+                        <input type="color" id="caption-color-picker" value="#ffffff">
+                        <input type="text" id="caption-color-text" value="white">
+                      </div>
+                    </div>
+                    <div class="input-group">
+                      <label for="caption-outline">Outline Width (px)</label>
+                      <input type="number" id="caption-outline" value="4" min="0" max="20">
+                    </div>
+                    <div class="input-group">
+                      <label for="caption-y-pos">Vertical Position (Y-ratio)</label>
+                      <div class="range-display">
+                        <input type="range" id="caption-y-pos" min="0.0" max="1.0" step="0.05" value="0.80">
+                        <span class="val-lbl" id="y-pos-val">0.80</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <button class="btn primary-btn" id="trigger-pipeline-btn">
+                  <span class="btn-text">Generate Video on Kaggle</span>
+                  <span class="spinner" style="display: none;"></span>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Right: Monitor & Output -->
+          <div class="exec-monitor">
+
+            <!-- Pipeline Execution Monitor -->
+            <div class="card glass-card status-card">
+              <div class="card-header">
+                <h2>Pipeline Execution Monitor</h2>
+                <div class="status-indicator" id="status-indicator">
+                  <span class="dot"></span>
+                  <span class="status-text">Idle</span>
+                </div>
+              </div>
+              <div class="card-body status-body">
+                <div class="progress-bar-container" style="display: none;" id="progress-container">
+                  <div class="progress-info">
+                    <span id="progress-stage">Queuing run on Kaggle GPU...</span>
+                    <span id="elapsed-time">0s</span>
+                  </div>
+                  <div class="progress-bar-track">
+                    <div class="progress-bar-fill" id="progress-fill"></div>
+                  </div>
+                </div>
+                <div class="console-log-wrapper">
+                  <div class="console-header">
+                    <span>Active Execution Logs</span>
+                    <button class="btn-clear" id="clear-logs">Clear</button>
+                  </div>
+                  <div class="console-log" id="console-output">
+                    <div class="log-line system">[SYSTEM] Ready. Upload script and trigger video.</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Output Video Card -->
+            <div class="card glass-card output-card" id="output-card" style="display: none;">
+              <div class="card-header">
+                <h2>Your Rendered Video</h2>
+              </div>
+              <div class="card-body output-body">
+                <div class="success-banner">
+                  <span class="party-icon">🎉</span>
+                  <div>
+                    <h3>Generation Completed Successfully!</h3>
+                    <p>The Kaggle T4 GPU has finished compiling your video assets.</p>
+                  </div>
+                </div>
+                <div class="video-preview-wrapper" id="video-preview-container"></div>
+                <div class="output-actions">
+                  <a href="#" class="btn primary-btn download-btn" id="download-video-btn" download>
+                    <span>Download Video File (MP4)</span>
+                  </a>
+                  <button class="btn secondary-btn copy-btn" id="copy-link-btn">
+                    <span class="copy-icon">🔗</span>
+                    <span id="copy-btn-text">Copy Download Link</span>
+                  </button>
+                </div>
+                <div class="success-message" id="link-copied-msg">✓ Link copied to clipboard!</div>
+              </div>
+            </div>
+
           </div>
         </div>
+      </div>
+    </section>
 
-      </section>
-
-      <!-- Right Column: Status & Output -->
-      <section class="status-panel">
-        
-        <!-- Real-Time Progress -->
-        <div class="card glass-card status-card">
+    <!-- ═══════════════════════════════════════════════════════════
+         TAB 3: LOGS
+         ═══════════════════════════════════════════════════════════ -->
+    <section class="tab-content" id="tab-logs">
+      <div class="tab-panel">
+        <div class="card glass-card">
           <div class="card-header">
-            <h2>Pipeline Execution Monitor</h2>
-            <div class="status-indicator" id="status-indicator">
-              <span class="dot"></span>
-              <span class="status-text">Idle</span>
-            </div>
+            <h2>Render History</h2>
+            <button class="btn-clear" id="clear-history-btn">Clear All</button>
           </div>
-          
-          <div class="card-body status-body">
-            <div class="progress-bar-container" style="display: none;" id="progress-container">
-              <div class="progress-info">
-                <span id="progress-stage">Queuing run on Kaggle GPU...</span>
-                <span id="elapsed-time">0s</span>
-              </div>
-              <div class="progress-bar-track">
-                <div class="progress-bar-fill" id="progress-fill"></div>
-              </div>
-            </div>
-
-            <div class="console-log-wrapper">
-              <div class="console-header">
-                <span>Active Execution Logs</span>
-                <button class="btn-clear" id="clear-logs">Clear</button>
-              </div>
-              <div class="console-log" id="console-output">
-                <div class="log-line system">[SYSTEM] Ready. Upload script and trigger video.</div>
+          <div class="card-body">
+            <div id="history-list">
+              <div class="history-empty">
+                <span class="history-empty-icon">📭</span>
+                <p>No completed renders yet.</p>
+                <p class="helper-small">Completed and failed jobs will appear here with download links.</p>
               </div>
             </div>
           </div>
         </div>
+      </div>
+    </section>
 
-        <!-- Output Video Card -->
-        <div class="card glass-card output-card" id="output-card" style="display: none;">
-          <div class="card-header">
-            <h2>Your Rendered Video</h2>
-          </div>
-          <div class="card-body output-body">
-            <div class="success-banner">
-              <span class="party-icon">🎉</span>
-              <div>
-                <h3>Generation Completed Successfully!</h3>
-                <p>The Kaggle T4 GPU has finished compiling your video assets.</p>
-              </div>
-            </div>
-            
-            <div class="video-preview-wrapper" id="video-preview-container">
-              <!-- Video gets injected here -->
-            </div>
-
-            <div class="output-actions">
-              <a href="#" class="btn primary-btn download-btn" id="download-video-btn" download>
-                <span>Download Video File (MP4)</span>
-              </a>
-              <button class="btn secondary-btn copy-btn" id="copy-link-btn">
-                <span class="copy-icon">🔗</span>
-                <span id="copy-btn-text">Copy Download Link</span>
-              </button>
-            </div>
-            <div class="success-message" id="link-copied-msg">✓ Link copied to clipboard!</div>
-          </div>
-        </div>
-
-        <!-- Render History Card -->
-        <div class="card glass-card history-card" id="history-card" style="margin-top: 20px;">
-          <div class="card-header">
-            <h2>Render History (Logs)</h2>
-          </div>
-          <div class="card-body" id="history-list">
-            <p style="color: var(--text-muted); font-size: 0.9rem;">No completed renders yet.</p>
-          </div>
-        </div>
-
-      </main>
-    </div>
   </div>
 
   <footer class="app-footer">

@@ -442,6 +442,11 @@ async function pollJobStatus(jobId) {
         job.status = 'error';
         job.log.push('[ERROR] Kaggle run failed with error status.');
         cleanupJobTemp(jobId);
+      } else if (lowerOutput.includes('cancel')) {
+        job.status = 'error';
+        job.log.push('[ERROR] Kaggle run was cancelled.');
+        clearInterval(timer);
+        cleanupJobTemp(jobId);
       } else if (lowerOutput.includes('queued')) {
         job.status = 'queued';
       }
