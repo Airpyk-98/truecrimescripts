@@ -668,6 +668,7 @@ async function downloadOutputs(jobId) {
     return;
   }
 
+  try {
     const outputsFolder = path.join(downloadDir, 'automated_channel_outputs');
     let videoFiles = [];
 
