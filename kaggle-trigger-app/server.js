@@ -335,7 +335,7 @@ app.post('/api/trigger', upload.single('csvFile'), async (req, res) => {
         if (src.includes('def run_phase_1_z_image():') && !src.includes('z_image_urls.json')) {
             src = src.replace('    serials = [str(r["Serial number"])', '    z_image_urls = {}\\n    serials = [str(r["Serial number"])');
             src = src.replace('urllib.request.urlretrieve(urls[0], img_path)', 'urllib.request.urlretrieve(urls[0], img_path)\\n                            z_image_urls[sn] = urls[0]');
-            src = src.replace('zip_path = os.path.join', 'with open(os.path.join(OUTPUTS_DIR if \\'OUTPUTS_DIR\\' in globals() else OUTPUT_DIR, "z_image_urls.json"), "w") as f:\\n        import json\\n        json.dump(z_image_urls, f)\\n\\n    zip_path = os.path.join');
+            src = src.replace('zip_path = os.path.join', 'with open(os.path.join(OUTPUTS_DIR if "OUTPUTS_DIR" in globals() else OUTPUT_DIR, "z_image_urls.json"), "w") as f:\\n        import json\\n        json.dump(z_image_urls, f)\\n\\n    zip_path = os.path.join');
             c.source = src.split('\\n').map((line, idx, arr) => idx === arr.length - 1 ? line : line + '\\n');
         }
         
