@@ -305,6 +305,7 @@ document.addEventListener('DOMContentLoaded', () => {
     formData.append('z_image_key', zImageKeyInput.value.trim());
     formData.append('use_bgm', useBgmToggle.checked ? 'true' : 'false');
     formData.append('bgm_volume', bgmVolumeInput.value);
+    formData.append('upscale_mode', document.getElementById('upscale-mode').value);
 
     fetch(getApiUrl('/api/trigger'), { method: 'POST', body: formData })
     .then(async (res) => {
@@ -433,8 +434,9 @@ document.addEventListener('DOMContentLoaded', () => {
             clearInterval(pollingInterval);
             pollingInterval = null;
             setPipelineRunning(false);
-            showOutputVideo(data.videoUrl, data.aspectRatio);
-            saveToHistory(data.videoUrl, data.aspectRatio, jobId, 'success');
+            const urls = data.videoUrls || (data.videoUrl ? [data.videoUrl] : []);
+            showOutputVideo(urls, data.aspectRatio);
+            saveToHistory(urls, data.aspectRatio, jobId, 'success');
             clearActiveJob();
           } else if (data.status === 'error') {
             updateStatusIndicator('error');
@@ -517,46 +519,81 @@ document.addEventListener('DOMContentLoaded', () => {
   // ═══════════════════════════════════════════════════════════
   // 10. OUTPUT VIDEO DISPLAY
   // ═══════════════════════════════════════════════════════════
-  const showOutputVideo = (videoUrl, aspectRatio) => {
+  const showOutputVideo = (urls, aspectRatio) => {
     const isVertical = aspectRatio === '9:16';
     videoPreviewContainer.className = 'video-preview-wrapper' + (isVertical ? ' vertical' : '');
+    videoPreviewContainer.style.flexDirection = 'row';
+    videoPreviewContainer.style.flexWrap = 'wrap';
+    videoPreviewContainer.style.gap = '16px';
+    videoPreviewContainer.style.justifyContent = 'center';
+
+    videoPreviewContainer.innerHTML = '';
+    const downloadBtnsContainer = document.querySelector('.output-actions');
+    downloadBtnsContainer.innerHTML = '';
 
     const backendUrl = backendUrlInput ? backendUrlInput.value.trim().replace(/\/$/, '') : '';
-    const fullVideoUrl = backendUrl ? `${backendUrl}${videoUrl}` : (window.location.origin + videoUrl);
 
-    videoPreviewContainer.innerHTML = `<video controls><source src="${fullVideoUrl}" type="video/mp4">Your browser does not support the video tag.</video>`;
+    urls.forEach((url, idx) => {
+      const fullVideoUrl = backendUrl ? `${backendUrl}${url}` : (window.location.origin + url);
+      const isUpscaled = url.includes('upscaled');
+      const label = isUpscaled ? 'Upscaled Video' : 'Normal Video';
 
-    downloadVideoBtn.href = fullVideoUrl;
-    downloadVideoBtn.setAttribute('download', `final_video_${aspectRatio.replace(':', '_')}.mp4`);
+      const vidWrapper = document.createElement('div');
+      vidWrapper.style.display = 'flex';
+      vidWrapper.style.flexDirection = 'column';
+      vidWrapper.style.alignItems = 'center';
+      vidWrapper.style.gap = '8px';
+      
+      vidWrapper.innerHTML = `
+        <h4 style="color: var(--text-muted); font-size: 14px; margin: 0;">${label}</h4>
+        <video controls style="max-height: 400px; border-radius: 8px;">
+          <source src="${fullVideoUrl}" type="video/mp4">Your browser does not support the video tag.
+        </video>
+      `;
+      videoPreviewContainer.appendChild(vidWrapper);
 
-    downloadVideoBtn.onclick = (e) => {
-      e.preventDefault();
-      const btnSpan = downloadVideoBtn.querySelector('span');
-      const orig = btnSpan.textContent;
-      btnSpan.textContent = 'Downloading...';
-      downloadVideoBtn.style.pointerEvents = 'none';
-      downloadVideoBtn.style.opacity = '0.7';
+      const dBtn = document.createElement('a');
+      dBtn.href = fullVideoUrl;
+      dBtn.className = 'btn primary-btn download-btn';
+      dBtn.style.marginBottom = '8px';
+      dBtn.innerHTML = `<span>Download ${label} (MP4)</span>`;
+      
+      dBtn.onclick = (e) => {
+        e.preventDefault();
+        const btnSpan = dBtn.querySelector('span');
+        const orig = btnSpan.textContent;
+        btnSpan.textContent = 'Downloading...';
+        dBtn.style.pointerEvents = 'none';
+        dBtn.style.opacity = '0.7';
 
-      fetch(fullVideoUrl)
-        .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.blob(); })
-        .then(blob => {
-          const a = document.createElement('a');
-          a.href = URL.createObjectURL(blob);
-          a.download = `final_video_${aspectRatio.replace(':', '_')}.mp4`;
-          a.click();
-          URL.revokeObjectURL(a.href);
-        })
-        .catch(() => window.open(fullVideoUrl, '_blank'))
-        .finally(() => { btnSpan.textContent = orig; downloadVideoBtn.style.pointerEvents = 'auto'; downloadVideoBtn.style.opacity = '1'; });
-    };
+        fetch(fullVideoUrl)
+          .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.blob(); })
+          .then(blob => {
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = `final_video_${isUpscaled ? 'upscaled_' : ''}${aspectRatio.replace(':', '_')}.mp4`;
+            a.click();
+            URL.revokeObjectURL(a.href);
+          })
+          .catch(() => window.open(fullVideoUrl, '_blank'))
+          .finally(() => { btnSpan.textContent = orig; dBtn.style.pointerEvents = 'auto'; dBtn.style.opacity = '1'; });
+      };
+      
+      downloadBtnsContainer.appendChild(dBtn);
+    });
 
-    copyLinkBtn.onclick = () => {
-      navigator.clipboard.writeText(fullVideoUrl).then(() => {
+    const cBtn = document.createElement('button');
+    cBtn.className = 'btn secondary-btn copy-btn';
+    cBtn.innerHTML = `<span class="copy-icon">🔗</span><span id="copy-btn-text">Copy Links</span>`;
+    cBtn.onclick = () => {
+      const allUrls = urls.map(u => (backendUrl ? `${backendUrl}${u}` : (window.location.origin + u))).join('\n');
+      navigator.clipboard.writeText(allUrls).then(() => {
         linkCopiedMsg.style.display = 'block';
-        copyBtnText.textContent = 'Copied!';
-        setTimeout(() => { linkCopiedMsg.style.display = 'none'; copyBtnText.textContent = 'Copy Download Link'; }, 3000);
+        cBtn.querySelector('#copy-btn-text').textContent = 'Copied!';
+        setTimeout(() => { linkCopiedMsg.style.display = 'none'; cBtn.querySelector('#copy-btn-text').textContent = 'Copy Links'; }, 3000);
       }).catch(() => alert('Failed to copy link.'));
     };
+    downloadBtnsContainer.appendChild(cBtn);
 
     outputCard.style.display = 'block';
     outputCard.scrollIntoView({ behavior: 'smooth' });
@@ -593,17 +630,19 @@ document.addEventListener('DOMContentLoaded', () => {
       div.className = 'history-item';
 
       const backendUrl = backendUrlInput ? backendUrlInput.value.trim().replace(/\/$/, '') : '';
-      const fullUrl = item.url ? (backendUrl ? `${backendUrl}${item.url}` : (window.location.origin + item.url)) : null;
+      
+      const itemUrls = item.urls || (item.url ? [item.url] : []);
+      const fullUrls = itemUrls.map(u => backendUrl ? `${backendUrl}${u}` : (window.location.origin + u));
 
       const statusClass = item.status === 'success' ? 'success' : 'failed';
       const statusLabel = item.status === 'success' ? '✓ Success' : '✗ Failed';
 
       let actionsHtml = '';
-      if (fullUrl) {
+      if (fullUrls.length > 0) {
         actionsHtml = `
           <div class="hist-actions">
-            <a href="${fullUrl}" target="_blank" class="btn secondary-btn">View</a>
-            <button class="btn secondary-btn hist-copy-btn" data-url="${fullUrl}">Copy</button>
+            ${fullUrls.map((fu, idx) => `<a href="${fu}" target="_blank" class="btn secondary-btn" style="margin-right: 4px;">View ${fullUrls.length > 1 ? (fu.includes('upscaled') ? 'Upscaled' : 'Normal') : ''}</a>`).join('')}
+            <button class="btn secondary-btn hist-copy-btn" data-url="${fullUrls.join('\n')}">Copy</button>
           </div>`;
       }
 
@@ -633,12 +672,12 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   };
 
-  const saveToHistory = (url, ratio, jobId, status) => {
+  const saveToHistory = (urls, ratio, jobId, status) => {
     let history = [];
     try { history = JSON.parse(localStorage.getItem('render_history') || '[]'); } catch (e) {}
 
     history.push({
-      url: url,
+      urls: urls,
       ratio: ratio,
       jobId: jobId,
       status: status,

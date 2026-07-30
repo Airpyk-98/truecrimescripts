@@ -167,7 +167,8 @@ app.post('/api/trigger', upload.single('csvFile'), async (req, res) => {
     use_z_image,
     z_image_key,
     use_bgm,
-    bgm_volume
+    bgm_volume,
+    upscale_mode
   } = req.body;
 
   // Validate uploaded file
@@ -315,7 +316,7 @@ app.post('/api/trigger', upload.single('csvFile'), async (req, res) => {
     cellText = cellText.replace(/USE_BGM\s*=\s*(True|False)/i, `USE_BGM = ${use_bgm === 'true' ? 'True' : 'False'}`);
     cellText = cellText.replace(/BGM_VOLUME\s*=\s*[0-9.]+/, `BGM_VOLUME = ${parseFloat(bgm_volume) || 0.12}`);
     cellText = cellText.replace(/CSV_DATA_URL\s*=\s*['"][^'"]*['"]/, `CSV_DATA_URL   = "input_data.csv"`);
-
+    cellText += `\nUPSCALE_MODE = "${upscale_mode || 'none'}"\n`;
     // Dynamic bypass for Pandas storage_options error on local file read
     cellText = cellText.replace(
       'df = pd.read_csv(CSV_DATA_URL, storage_options={"User-Agent": "Mozilla/5.0"})',
@@ -323,6 +324,193 @@ app.post('/api/trigger', upload.single('csvFile'), async (req, res) => {
     );
 
     notebookData.cells[configCellIndex].source = cellText.match(/[^\n]*\n|[^\n]+/g) || [];
+
+    // === DYNAMIC NOTEBOOK INJECTION FOR UPSCALE ===
+    for (let i = 0; i < notebookData.cells.length; i++) {
+      const c = notebookData.cells[i];
+      if (c.cell_type === 'code') {
+        let src = c.source.join("");
+        
+        // 1. Patch run_phase_1_z_image to save urls
+        if (src.includes('def run_phase_1_z_image():') && !src.includes('z_image_urls.json')) {
+            src = src.replace('    serials = [str(r["Serial number"])', '    z_image_urls = {}\\n    serials = [str(r["Serial number"])');
+            src = src.replace('urllib.request.urlretrieve(urls[0], img_path)', 'urllib.request.urlretrieve(urls[0], img_path)\\n                            z_image_urls[sn] = urls[0]');
+            src = src.replace('zip_path = os.path.join', 'with open(os.path.join(OUTPUTS_DIR if \\'OUTPUTS_DIR\\' in globals() else OUTPUT_DIR, "z_image_urls.json"), "w") as f:\\n        import json\\n        json.dump(z_image_urls, f)\\n\\n    zip_path = os.path.join');
+            c.source = src.split('\\n').map((line, idx, arr) => idx === arr.length - 1 ? line : line + '\\n');
+        }
+        
+        // 2. Inject run_phase_1c_upscale before phase 2
+        if (src.includes('def run_phase_2_audio():') && !src.includes('def run_phase_1c_upscale():')) {
+           const upscaleCode = `
+# ============================================================
+# PHASE 1C — Upscale Images
+# ============================================================
+def run_phase_1c_upscale():
+    import requests, time, urllib.request, json
+    print("\\n" + "="*60)
+    print("PHASE 1C: Upscale Images (kie.ai)")
+    print("="*60)
+    
+    upscaled_dir = os.path.join(OUTPUTS_DIR if 'OUTPUTS_DIR' in globals() else OUTPUT_DIR, "automated_channel_outputs", "images_upscaled")
+    os.makedirs(upscaled_dir, exist_ok=True)
+    
+    global IMAGES_DIR_UPSCALED
+    IMAGES_DIR_UPSCALED = upscaled_dir
+    
+    if UPSCALE_MODE == "none":
+        print("--> Upscaling disabled. Skipping.")
+        return
+        
+    z_image_key = globals().get("Z_IMAGE_KEY", "").strip()
+    if not z_image_key:
+        print("--> Error: Z_IMAGE_KEY is missing but upscale mode is active. Skipping.")
+        return
+        
+    headers = {
+        "Authorization": f"Bearer {z_image_key}",
+        "Content-Type": "application/json"
+    }
+    
+    z_image_urls = {}
+    urls_file = os.path.join(OUTPUTS_DIR if 'OUTPUTS_DIR' in globals() else OUTPUT_DIR, "z_image_urls.json")
+    if os.path.exists(urls_file):
+        try:
+            with open(urls_file, "r") as f:
+                z_image_urls = json.load(f)
+        except:
+            pass
+
+    for idx, row in tqdm(df.iterrows(), total=len(df), desc="Upscaling Images"):
+        sn = str(row["Serial number"])
+        orig_img_path = os.path.join(IMAGES_DIR, f"{sn}.png")
+        up_img_path = os.path.join(upscaled_dir, f"{sn}.png")
+        
+        if os.path.exists(up_img_path):
+            continue
+            
+        public_url = z_image_urls.get(sn)
+        
+        if not public_url:
+            if not os.path.exists(orig_img_path):
+                print(f"  [ERROR] Missing original image for {sn}.")
+                continue
+            try:
+                print(f"  Uploading {sn}.png to catbox.moe...")
+                with open(orig_img_path, 'rb') as f:
+                    up_resp = requests.post("https://catbox.moe/user/api.php", data={"reqtype": "fileupload"}, files={"fileToUpload": f})
+                up_resp.raise_for_status()
+                public_url = up_resp.text.strip()
+            except Exception as e:
+                print(f"  [ERROR] Catbox upload failed for {sn}: {e}")
+                continue
+                
+        create_payload = {
+            "model": "recraft/crisp-upscale",
+            "input": {
+                "image_url": public_url
+            }
+        }
+        
+        task_id = None
+        for attempt in range(3):
+            try:
+                resp = requests.post("https://api.kie.ai/api/v1/jobs/createTask", json=create_payload, headers=headers)
+                data = resp.json()
+                if data.get("code") == 200:
+                    task_id = data.get("data", {}).get("taskId")
+                    break
+            except Exception as e:
+                pass
+            time.sleep(3)
+            
+        if not task_id:
+            print(f"  [ERROR] Failed to start upscale task for {sn}.")
+            continue
+            
+        success = False
+        for _ in range(60):
+            time.sleep(5)
+            try:
+                poll_resp = requests.get(f"https://api.kie.ai/api/v1/jobs/recordInfo?taskId={task_id}", headers=headers)
+                poll_data = poll_resp.json()
+                if poll_data.get("code") == 200:
+                    state = poll_data.get("data", {}).get("state")
+                    if state == "success":
+                        res_json = json.loads(poll_data.get("data", {}).get("resultJson", "{}"))
+                        urls = res_json.get("resultUrls", [])
+                        if urls:
+                            urllib.request.urlretrieve(urls[0], up_img_path)
+                            print(f"  Saved upscaled {sn}.png")
+                            success = True
+                        break
+                    elif state == "fail":
+                        print(f"  [ERROR] Upscale failed for {sn}: {poll_data.get('data', {}).get('failMsg')}")
+                        break
+            except Exception as e:
+                pass
+                
+        if not success:
+            print(f"  [ERROR] Could not fetch upscaled image for {sn}.")
+            
+    print("--> Phase 1C Upscale complete.")
+`;
+           const upLines = upscaleCode.split('\\n').map((line, idx, arr) => idx === arr.length - 1 ? line : line + '\\n');
+           const newLines = [];
+           for (let line of c.source) {
+               if (line.includes('def run_phase_2_audio():')) newLines.push(...upLines);
+               newLines.push(line);
+           }
+           c.source = newLines;
+        }
+
+        // 3. Patch execution block
+        if (src.includes('run_phase_5_final(stitched)') && !src.includes('run_pipeline_for_images')) {
+            const newExec = `if USE_Z_IMAGE:
+    run_phase_1_z_image()
+else:
+    run_phase_1_flux()
+
+if UPSCALE_MODE in ["upscaled_only", "both"]:
+    run_phase_1c_upscale()
+
+run_phase_2_audio()
+
+def run_pipeline_for_images(img_dir_path, suffix_name):
+    global IMAGES_DIR
+    orig_images = IMAGES_DIR
+    IMAGES_DIR = img_dir_path
+    
+    run_phase_3_effects()
+    stitched_vids = run_phase_4_stitch()
+    
+    final_out = os.path.join(OUTPUT_DIR, f"FINAL_AUTOMATED_OUTPUT_{ASPECT_RATIO.replace(':','_')}_{suffix_name}.mp4")
+    default_out = os.path.join(OUTPUT_DIR, f"FINAL_AUTOMATED_OUTPUT_{ASPECT_RATIO.replace(':','_')}.mp4")
+    
+    run_phase_5_final(stitched_vids)
+    
+    if os.path.exists(default_out):
+        os.rename(default_out, final_out)
+        print(f"--> Saved {suffix_name} video to: {final_out}")
+        
+    IMAGES_DIR = orig_images
+
+if UPSCALE_MODE == "both":
+    print("\\n--> Running pipeline for NORMAL images...")
+    run_pipeline_for_images(IMAGES_DIR, "normal")
+    print("\\n--> Running pipeline for UPSCALED images...")
+    run_pipeline_for_images(IMAGES_DIR_UPSCALED, "upscaled")
+elif UPSCALE_MODE == "upscaled_only":
+    print("\\n--> Running pipeline for UPSCALED images...")
+    run_pipeline_for_images(IMAGES_DIR_UPSCALED, "upscaled")
+else:
+    print("\\n--> Running pipeline for NORMAL images...")
+    run_pipeline_for_images(IMAGES_DIR, "normal")`;
+            src = src.replace(/if USE_Z_IMAGE:[\s\S]*run_phase_5_final\(stitched\)/m, newExec);
+            c.source = src.split('\n').map((line, idx, arr) => idx === arr.length - 1 ? line : line + '\n');
+        }
+      }
+    }
+    // ===============================================
 
     // Write modified notebook
     const notebookFilename = 'Youtube-Truecrime-FLUX-Zai-KokoroTTS-T4.ipynb';
@@ -480,46 +668,51 @@ async function downloadOutputs(jobId) {
     return;
   }
 
-  // Scan downloadDir for the MP4 file
-  try {
     const outputsFolder = path.join(downloadDir, 'automated_channel_outputs');
-    let videoFile = null;
+    let videoFiles = [];
+
+    const findAllMp4s = (dir) => {
+      let results = [];
+      if (!fs.existsSync(dir)) return results;
+      const files = fs.readdirSync(dir);
+      for (const file of files) {
+        const fullPath = path.join(dir, file);
+        if (fs.statSync(fullPath).isDirectory()) {
+          results = results.concat(findAllMp4s(fullPath));
+        } else if (file.endsWith('.mp4')) {
+          results.push(fullPath);
+        }
+      }
+      return results;
+    };
 
     if (fs.existsSync(outputsFolder)) {
-      const files = fs.readdirSync(outputsFolder);
-      videoFile = files.find(f => f.endsWith('.mp4'));
+      videoFiles = fs.readdirSync(outputsFolder)
+        .filter(f => f.endsWith('.mp4'))
+        .map(f => path.join(outputsFolder, f));
+    }
+    
+    if (videoFiles.length === 0) {
+      videoFiles = findAllMp4s(downloadDir);
     }
 
-    if (!videoFile) {
-      // Fallback: search recursively in the download directory
-      const findMp4 = (dir) => {
-        const files = fs.readdirSync(dir);
-        for (const file of files) {
-          const fullPath = path.join(dir, file);
-          if (fs.statSync(fullPath).isDirectory()) {
-            const found = findMp4(fullPath);
-            if (found) return found;
-          } else if (file.endsWith('.mp4')) {
-            return fullPath;
-          }
-        }
-        return null;
-      };
-      videoFile = findMp4(downloadDir);
-    } else {
-      videoFile = path.join(outputsFolder, videoFile);
-    }
-
-    if (videoFile && fs.existsSync(videoFile)) {
-      const destFilename = `video_${jobId}.mp4`;
-      const destPath = path.join(OUTPUTS_DIR, destFilename);
-      fs.copyFileSync(videoFile, destPath);
+    if (videoFiles.length > 0) {
+      const urls = [];
+      videoFiles.forEach((vFile, idx) => {
+        // preserve the filename logic from the notebook (e.g. final_video_upscaled.mp4 vs final_video_normal.mp4)
+        // or just append _upscaled based on original name
+        const isUpscaled = vFile.includes('upscaled');
+        const destFilename = `video_${jobId}_${isUpscaled ? 'upscaled' : 'normal'}_${idx}.mp4`;
+        const destPath = path.join(OUTPUTS_DIR, destFilename);
+        fs.copyFileSync(vFile, destPath);
+        urls.push(`/outputs/${destFilename}`);
+      });
       
       job.status = 'complete';
-      job.videoUrl = `/outputs/${destFilename}`;
-      job.log.push('[SUCCESS] Video downloaded and served successfully!');
+      job.videoUrls = urls;
+      job.log.push(`[SUCCESS] ${urls.length} Video(s) downloaded and served successfully!`);
     } else {
-      throw new Error('MP4 output file not found in downloaded assets.');
+      throw new Error('No MP4 output files found in downloaded assets.');
     }
   } catch (e) {
     job.status = 'error';

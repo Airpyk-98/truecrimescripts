@@ -192,6 +192,15 @@
                     <input type="checkbox" id="caption-enabled" checked>
                     <label for="caption-enabled">Burn Video Captions</label>
                   </div>
+                  <div class="input-group">
+                    <label for="upscale-mode">Output Mode (Upscaling)</label>
+                    <select id="upscale-mode">
+                      <option value="none">Normal Video Only (Default)</option>
+                      <option value="upscaled_only">Upscaled Video Only</option>
+                      <option value="both">Both (Normal & Upscaled)</option>
+                    </select>
+                    <p class="helper-small" style="margin-top: 4px;">*Upscaling requires Z Image API Key to be configured in Credentials tab.</p>
+                  </div>
                 </div>
 
                 <!-- Advanced Settings -->
