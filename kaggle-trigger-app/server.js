@@ -333,10 +333,10 @@ app.post('/api/trigger', upload.single('csvFile'), async (req, res) => {
         
         // 1. Patch run_phase_1_z_image to save urls
         if (src.includes('def run_phase_1_z_image():') && !src.includes('z_image_urls.json')) {
-            src = src.replace('    serials = [str(r["Serial number"])', '    z_image_urls = {}\\n    serials = [str(r["Serial number"])');
-            src = src.replace('urllib.request.urlretrieve(urls[0], img_path)', 'urllib.request.urlretrieve(urls[0], img_path)\\n                            z_image_urls[sn] = urls[0]');
-            src = src.replace('zip_path = os.path.join', 'with open(os.path.join(OUTPUTS_DIR if "OUTPUTS_DIR" in globals() else OUTPUT_DIR, "z_image_urls.json"), "w") as f:\\n        import json\\n        json.dump(z_image_urls, f)\\n\\n    zip_path = os.path.join');
-            c.source = src.split('\\n').map((line, idx, arr) => idx === arr.length - 1 ? line : line + '\\n');
+            src = src.replace('    serials = [str(r["Serial number"])', '    z_image_urls = {}\n    serials = [str(r["Serial number"])');
+            src = src.replace('urllib.request.urlretrieve(urls[0], img_path)', 'urllib.request.urlretrieve(urls[0], img_path)\n                            z_image_urls[sn] = urls[0]');
+            src = src.replace('zip_path = os.path.join', 'with open(os.path.join(OUTPUTS_DIR if "OUTPUTS_DIR" in globals() else OUTPUT_DIR, "z_image_urls.json"), "w") as f:\n        import json\n        json.dump(z_image_urls, f)\n\n    zip_path = os.path.join');
+            c.source = src.split('\n').map((line, idx, arr) => idx === arr.length - 1 ? line : line + '\n');
         }
         
         // 2. Inject run_phase_1c_upscale before phase 2
@@ -454,7 +454,7 @@ def run_phase_1c_upscale():
             
     print("--> Phase 1C Upscale complete.")
 `;
-           const upLines = upscaleCode.split('\\n').map((line, idx, arr) => idx === arr.length - 1 ? line : line + '\\n');
+           const upLines = upscaleCode.split('\n').map((line, idx, arr) => idx === arr.length - 1 ? line : line + '\n');
            const newLines = [];
            for (let line of c.source) {
                if (line.includes('def run_phase_2_audio():')) newLines.push(...upLines);
@@ -464,7 +464,8 @@ def run_phase_1c_upscale():
         }
 
         // 3. Patch execution block
-        if (src.includes('run_phase_5_final(stitched)') && !src.includes('run_pipeline_for_images')) {
+        let srcStr = c.source.join("");
+        if (srcStr.includes('run_phase_5_final(stitched)') && !srcStr.includes('run_pipeline_for_images')) {
             const newExec = `if USE_Z_IMAGE:
     run_phase_1_z_image()
 else:
@@ -505,8 +506,12 @@ elif UPSCALE_MODE == "upscaled_only":
 else:
     print("\\n--> Running pipeline for NORMAL images...")
     run_pipeline_for_images(IMAGES_DIR, "normal")`;
-            src = src.replace(/if USE_Z_IMAGE:[\s\S]*run_phase_5_final\(stitched\)/m, newExec);
-            c.source = src.split('\n').map((line, idx, arr) => idx === arr.length - 1 ? line : line + '\n');
+            const startIndex = c.source.findIndex(line => line.includes('if USE_Z_IMAGE:'));
+            const endIndex = c.source.findIndex(line => line.includes('run_phase_5_final(stitched)'));
+            if (startIndex !== -1 && endIndex !== -1 && endIndex >= startIndex) {
+                const execLines = newExec.split('\n').map((line, idx, arr) => idx === arr.length - 1 ? line : line + '\n');
+                c.source.splice(startIndex, endIndex - startIndex + 1, ...execLines);
+            }
         }
       }
     }
