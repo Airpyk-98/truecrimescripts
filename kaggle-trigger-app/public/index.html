@@ -121,6 +121,34 @@
           </div>
         </div>
 
+        <!-- AI Script Generator Config -->
+        <div class="card glass-card">
+          <div class="card-header">
+            <span class="badge-icon">🤖</span>
+            <h2>AI Script Generator (OpenAI-Compatible)</h2>
+          </div>
+          <div class="card-body">
+            <p class="helper-small">Configure an OpenAI-compatible API to generate scripts automatically.</p>
+            <div class="input-grid" style="margin-bottom: 12px;">
+              <div class="input-group">
+                <label for="ai-base-url">Base URL</label>
+                <input type="text" id="ai-base-url" placeholder="e.g., https://integrate.api.nvidia.com/v1">
+              </div>
+              <div class="input-group">
+                <label for="ai-api-key">API Key</label>
+                <input type="password" id="ai-api-key" placeholder="Your API Key">
+              </div>
+            </div>
+            <button class="btn secondary-btn" id="fetch-models-btn" style="margin-bottom: 12px; width: 100%;">
+              <span>🔄</span> Fetch Available Models
+            </button>
+            <div class="input-group" id="ai-model-group" style="display: none;">
+              <label for="ai-model">Select Model</label>
+              <select id="ai-model"></select>
+            </div>
+          </div>
+        </div>
+
       </div>
     </section>
 
@@ -134,23 +162,18 @@
           <!-- Left: Config -->
           <div class="exec-config">
 
-            <!-- CSV Upload -->
+            <!-- Video Titles Input -->
             <div class="card glass-card">
               <div class="card-header">
                 <span class="badge">1</span>
-                <h2>Upload Script CSV</h2>
+                <h2>Input Video Titles</h2>
               </div>
               <div class="card-body">
-                <div class="upload-zone" id="drop-zone">
-                  <input type="file" id="csv-file-input" accept=".csv" style="display: none;">
-                  <div class="upload-icon">📄</div>
-                  <p class="upload-title">Drag & Drop your True Crime CSV here</p>
-                  <p class="upload-subtitle">or click to browse from files</p>
-                  <div class="file-details" id="selected-file-details" style="display: none;">
-                    <span class="file-name" id="selected-file-name">file.csv</span>
-                    <span class="file-size" id="selected-file-size">0 KB</span>
-                  </div>
+                <div class="input-group">
+                  <label for="titles-input">Paste Titles (One per line)</label>
+                  <textarea id="titles-input" rows="6" placeholder="The Housing Wealth Paradox&#10;The Penny Melting Arbitrage&#10;..." style="width: 100%; padding: 12px; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.1); background: rgba(0, 0, 0, 0.2); color: white; resize: vertical; font-family: inherit; font-size: 14px;"></textarea>
                 </div>
+                <p class="helper-small" style="margin-top: 8px;">The AI will sequentially generate a full script for each title and render the videos one by one.</p>
               </div>
             </div>
 

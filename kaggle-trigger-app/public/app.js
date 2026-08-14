@@ -20,11 +20,13 @@ document.addEventListener('DOMContentLoaded', () => {
   const bgmVolVal = document.getElementById('bgm-vol-val');
   const bgmVolumeGroup = document.getElementById('bgm-volume-group');
 
-  const dropZone = document.getElementById('drop-zone');
-  const csvFileInput = document.getElementById('csv-file-input');
-  const selectedFileDetails = document.getElementById('selected-file-details');
-  const selectedFileName = document.getElementById('selected-file-name');
-  const selectedFileSize = document.getElementById('selected-file-size');
+  const aiBaseUrlInput = document.getElementById('ai-base-url');
+  const aiApiKeyInput = document.getElementById('ai-api-key');
+  const fetchModelsBtn = document.getElementById('fetch-models-btn');
+  const aiModelGroup = document.getElementById('ai-model-group');
+  const aiModelSelect = document.getElementById('ai-model');
+
+  const titlesInput = document.getElementById('titles-input');
 
   const aspectRatioSelect = document.getElementById('aspect-ratio');
   const kokoroVoiceSelect = document.getElementById('kokoro-voice');
@@ -115,6 +117,9 @@ document.addEventListener('DOMContentLoaded', () => {
     backendUrlInput.value = s('backend_url');
     zImageKeyInput.value = s('z_image_key');
 
+    aiBaseUrlInput.value = s('ai_base_url') || 'https://integrate.api.nvidia.com/v1';
+    aiApiKeyInput.value = s('ai_api_key');
+
     if (localStorage.getItem('use_z_image') === 'true') {
       useZImageToggle.checked = true;
       zImageKeyGroup.style.display = 'block';
@@ -142,6 +147,9 @@ document.addEventListener('DOMContentLoaded', () => {
     localStorage.setItem('backend_url', backendUrlInput.value.trim());
     localStorage.setItem('use_z_image', useZImageToggle.checked);
     localStorage.setItem('z_image_key', zImageKeyInput.value.trim());
+
+    localStorage.setItem('ai_base_url', aiBaseUrlInput.value.trim());
+    localStorage.setItem('ai_api_key', aiApiKeyInput.value.trim());
 
     // Sync to server
     fetch(getApiUrl('/api/setup-local-kaggle'), {
@@ -227,29 +235,53 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // ═══════════════════════════════════════════════════════════
-  // 4. CSV DRAG & DROP
+  // 4. AI MODEL FETCHING
   // ═══════════════════════════════════════════════════════════
-  dropZone.addEventListener('click', () => csvFileInput.click());
-  csvFileInput.addEventListener('change', (e) => { if (e.target.files.length > 0) handleFileSelected(e.target.files[0]); });
-  dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('dragover'); });
-  dropZone.addEventListener('dragleave', () => { dropZone.classList.remove('dragover'); });
-  dropZone.addEventListener('drop', (e) => {
-    e.preventDefault();
-    dropZone.classList.remove('dragover');
-    if (e.dataTransfer.files.length > 0) {
-      const file = e.dataTransfer.files[0];
-      if (file.name.endsWith('.csv')) { csvFileInput.files = e.dataTransfer.files; handleFileSelected(file); }
-      else addLogLine('[ERROR] Invalid file type. Only CSV files are accepted.', 'error');
+  fetchModelsBtn.addEventListener('click', async () => {
+    const baseUrl = aiBaseUrlInput.value.trim();
+    const apiKey = aiApiKeyInput.value.trim();
+    if (!baseUrl || !apiKey) {
+      alert('Please enter a Base URL and API Key.');
+      return;
+    }
+    
+    fetchModelsBtn.disabled = true;
+    fetchModelsBtn.innerHTML = '<span>⏳</span> Fetching Models...';
+    
+    try {
+      const response = await fetch(getApiUrl('/api/models'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ base_url: baseUrl, api_key: apiKey })
+      });
+      
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Failed to fetch models');
+      
+      aiModelSelect.innerHTML = '';
+      if (data.data && Array.isArray(data.data)) {
+        data.data.forEach(model => {
+          const option = document.createElement('option');
+          option.value = model.id;
+          option.textContent = model.id;
+          if (model.id.toLowerCase().includes('minimax') || model.id.toLowerCase().includes('m3')) {
+            option.selected = true;
+          }
+          aiModelSelect.appendChild(option);
+        });
+        aiModelGroup.style.display = 'flex';
+        addLogLine('[SYSTEM] Models fetched successfully.', 'success');
+      } else {
+        throw new Error('Unexpected model list format.');
+      }
+    } catch (err) {
+      alert('Error fetching models: ' + err.message);
+      addLogLine('[ERROR] ' + err.message, 'error');
+    } finally {
+      fetchModelsBtn.disabled = false;
+      fetchModelsBtn.innerHTML = '<span>🔄</span> Fetch Available Models';
     }
   });
-
-  const handleFileSelected = (file) => {
-    selectedFile = file;
-    selectedFileName.textContent = file.name;
-    selectedFileSize.textContent = (file.size / 1024).toFixed(1) + ' KB';
-    selectedFileDetails.style.display = 'inline-flex';
-    addLogLine(`[SYSTEM] Loaded CSV script: ${file.name} (${(file.size / 1024).toFixed(1)} KB)`, 'system');
-  };
 
   // ═══════════════════════════════════════════════════════════
   // 5. LOG HELPER (persists to localStorage)
@@ -278,18 +310,32 @@ document.addEventListener('DOMContentLoaded', () => {
   // 6. PIPELINE TRIGGER
   // ═══════════════════════════════════════════════════════════
   triggerPipelineBtn.addEventListener('click', () => {
-    if (!selectedFile) { alert('Please upload a script CSV file first.'); return; }
+    const rawTitles = titlesInput.value.trim();
+    if (!rawTitles) { alert('Please paste at least one video title.'); return; }
+    const titlesArray = rawTitles.split('\\n').map(t => t.trim()).filter(t => t.length > 0);
+    if (titlesArray.length === 0) { alert('No valid titles found.'); return; }
+    
     const username = kaggleUsernameInput.value.trim();
     const key = kaggleKeyInput.value.trim();
     if (!username || !key) { alert('Please input your Kaggle username and API key in the Credentials tab.'); return; }
 
+    const aiBaseUrl = aiBaseUrlInput.value.trim();
+    const aiApiKey = aiApiKeyInput.value.trim();
+    const aiModel = aiModelSelect.value || '';
+    if (!aiBaseUrl || !aiApiKey || !aiModel) { alert('Please configure the AI Script Generator in the Credentials tab.'); return; }
+
     setPipelineRunning(true);
     outputCard.style.display = 'none';
+    videoPreviewContainer.innerHTML = '';
     consoleOutput.innerHTML = '';
-    addLogLine('[SYSTEM] Preparing video automation payload...', 'system');
+    addLogLine(`[SYSTEM] Preparing payload for ${titlesArray.length} titles...`, 'system');
 
     const formData = new FormData();
-    formData.append('csvFile', selectedFile);
+    formData.append('titles', JSON.stringify(titlesArray));
+    formData.append('ai_base_url', aiBaseUrl);
+    formData.append('ai_api_key', aiApiKey);
+    formData.append('ai_model', aiModel);
+
     formData.append('aspect_ratio', aspectRatioSelect.value);
     formData.append('kokoro_voice', kokoroVoiceSelect.value);
     formData.append('caption_enabled', captionEnabledCheckbox.checked ? 'true' : 'false');
@@ -307,7 +353,7 @@ document.addEventListener('DOMContentLoaded', () => {
     formData.append('bgm_volume', bgmVolumeInput.value);
     formData.append('upscale_mode', document.getElementById('upscale-mode').value);
 
-    fetch(getApiUrl('/api/trigger'), { method: 'POST', body: formData })
+    fetch(getApiUrl('/api/trigger-titles'), { method: 'POST', body: formData })
     .then(async (res) => {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to start execution.');
@@ -418,13 +464,29 @@ document.addEventListener('DOMContentLoaded', () => {
             updateProgress(15, 'Queued in Kaggle background pipeline...');
           } else if (data.status === 'running') {
             updateStatusIndicator('running');
-            let pct = 30, msg = 'Rendering video assets on GPU...';
+            
+            // Check if we are doing batch titles
+            if (data.titlesTotal > 0) {
+              const currentTitle = data.titlesDone + 1;
+              const displayTitle = currentTitle <= data.titlesTotal ? currentTitle : data.titlesTotal;
+              
+              // Incrementally show completed videos
+              if (data.completedVideos && data.completedVideos.length > 0) {
+                 showOutputVideo(data.completedVideos, data.aspectRatio);
+              }
+              
+              let pct = Math.floor((data.titlesDone / data.titlesTotal) * 100);
+              let msg = `Generating title ${displayTitle} of ${data.titlesTotal}...`;
+              updateProgress(pct || 5, msg);
+            } else {
+              let pct = 30, msg = 'Rendering video assets on GPU...';
             const logStr = data.log.join('\n');
             if (logStr.includes('PHASE 2:')) { pct = 50; msg = 'Generating voices (Kokoro TTS)...'; }
             if (logStr.includes('PHASE 3:')) { pct = 70; msg = 'Burning captions + motion (FFmpeg)...'; }
             if (logStr.includes('PHASE 4:')) { pct = 85; msg = 'Stitching voice + video (FFmpeg)...'; }
             if (logStr.includes('PHASE 5:')) { pct = 95; msg = 'Mixing BGM and exporting (FFmpeg)...'; }
             updateProgress(pct, msg);
+            }
           } else if (data.status === 'downloading') {
             updateStatusIndicator('downloading');
             updateProgress(98, 'Downloading final MP4 from Kaggle...');
@@ -435,8 +497,9 @@ document.addEventListener('DOMContentLoaded', () => {
             pollingInterval = null;
             setPipelineRunning(false);
             const urls = data.videoUrls || (data.videoUrl ? [data.videoUrl] : []);
-            showOutputVideo(urls, data.aspectRatio);
-            saveToHistory(urls, data.aspectRatio, jobId, 'success');
+            const finalOutputs = (data.completedVideos && data.completedVideos.length > 0) ? data.completedVideos : urls;
+            showOutputVideo(finalOutputs, data.aspectRatio);
+            saveToHistory(finalOutputs, data.aspectRatio, jobId, 'success');
             clearActiveJob();
           } else if (data.status === 'error') {
             updateStatusIndicator('error');
@@ -519,7 +582,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // ═══════════════════════════════════════════════════════════
   // 10. OUTPUT VIDEO DISPLAY
   // ═══════════════════════════════════════════════════════════
-  const showOutputVideo = (urls, aspectRatio) => {
+  const showOutputVideo = (outputs, aspectRatio) => {
     const isVertical = aspectRatio === '9:16';
     videoPreviewContainer.className = 'video-preview-wrapper' + (isVertical ? ' vertical' : '');
     videoPreviewContainer.style.flexDirection = 'row';
@@ -533,61 +596,70 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const backendUrl = backendUrlInput ? backendUrlInput.value.trim().replace(/\/$/, '') : '';
 
-    urls.forEach((url, idx) => {
-      const fullVideoUrl = backendUrl ? `${backendUrl}${url}` : (window.location.origin + url);
-      const isUpscaled = url.includes('upscaled');
-      const label = isUpscaled ? 'Upscaled Video' : 'Normal Video';
+    const flatUrls = [];
 
-      const vidWrapper = document.createElement('div');
-      vidWrapper.style.display = 'flex';
-      vidWrapper.style.flexDirection = 'column';
-      vidWrapper.style.alignItems = 'center';
-      vidWrapper.style.gap = '8px';
+    outputs.forEach((item, idx) => {
+      const isObject = typeof item === 'object' && item !== null;
+      const title = isObject ? item.title : ('Video ' + (idx + 1));
+      const urls = isObject ? item.urls : [item];
       
-      vidWrapper.innerHTML = `
-        <h4 style="color: var(--text-muted); font-size: 14px; margin: 0;">${label}</h4>
-        <video controls style="max-height: 400px; border-radius: 8px;">
-          <source src="${fullVideoUrl}" type="video/mp4">Your browser does not support the video tag.
-        </video>
-      `;
-      videoPreviewContainer.appendChild(vidWrapper);
+      urls.forEach((url, sIdx) => {
+        const fullVideoUrl = backendUrl ? `${backendUrl}${url}` : (window.location.origin + url);
+        flatUrls.push(fullVideoUrl);
+        const isUpscaled = url.includes('upscaled');
+        const label = isObject ? `${title} ${isUpscaled ? '(Upscaled)' : ''}` : (isUpscaled ? 'Upscaled Video' : 'Normal Video');
 
-      const dBtn = document.createElement('a');
-      dBtn.href = fullVideoUrl;
-      dBtn.className = 'btn primary-btn download-btn';
-      dBtn.style.marginBottom = '8px';
-      dBtn.innerHTML = `<span>Download ${label} (MP4)</span>`;
-      
-      dBtn.onclick = (e) => {
-        e.preventDefault();
-        const btnSpan = dBtn.querySelector('span');
-        const orig = btnSpan.textContent;
-        btnSpan.textContent = 'Downloading...';
-        dBtn.style.pointerEvents = 'none';
-        dBtn.style.opacity = '0.7';
+        const vidWrapper = document.createElement('div');
+        vidWrapper.style.display = 'flex';
+        vidWrapper.style.flexDirection = 'column';
+        vidWrapper.style.alignItems = 'center';
+        vidWrapper.style.gap = '8px';
+        
+        vidWrapper.innerHTML = `
+          <h4 style="color: var(--text-muted); font-size: 14px; margin: 0; text-align: center; max-width: 250px;">${label}</h4>
+          <video controls style="max-height: 400px; border-radius: 8px;">
+            <source src="${fullVideoUrl}" type="video/mp4">Your browser does not support the video tag.
+          </video>
+        `;
+        videoPreviewContainer.appendChild(vidWrapper);
 
-        fetch(fullVideoUrl)
-          .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.blob(); })
-          .then(blob => {
-            const a = document.createElement('a');
-            a.href = URL.createObjectURL(blob);
-            a.download = `final_video_${isUpscaled ? 'upscaled_' : ''}${aspectRatio.replace(':', '_')}.mp4`;
-            a.click();
-            URL.revokeObjectURL(a.href);
-          })
-          .catch(() => window.open(fullVideoUrl, '_blank'))
-          .finally(() => { btnSpan.textContent = orig; dBtn.style.pointerEvents = 'auto'; dBtn.style.opacity = '1'; });
-      };
-      
-      downloadBtnsContainer.appendChild(dBtn);
+        const dBtn = document.createElement('a');
+        dBtn.href = fullVideoUrl;
+        dBtn.className = 'btn primary-btn download-btn';
+        dBtn.style.marginBottom = '8px';
+        dBtn.innerHTML = `<span>Download ${isObject ? 'MP4' : label}</span>`;
+        
+        dBtn.onclick = (e) => {
+          e.preventDefault();
+          const btnSpan = dBtn.querySelector('span');
+          const orig = btnSpan.textContent;
+          btnSpan.textContent = 'Downloading...';
+          dBtn.style.pointerEvents = 'none';
+          dBtn.style.opacity = '0.7';
+
+          fetch(fullVideoUrl)
+            .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.blob(); })
+            .then(blob => {
+              const a = document.createElement('a');
+              a.href = URL.createObjectURL(blob);
+              let sanitized = title.replace(/[^a-zA-Z0-9_]/g, '_').substring(0, 30);
+              a.download = isObject ? `${sanitized}${isUpscaled ? '_upscaled' : ''}.mp4` : `final_video_${isUpscaled ? 'upscaled_' : ''}${aspectRatio.replace(':', '_')}.mp4`;
+              a.click();
+              URL.revokeObjectURL(a.href);
+            })
+            .catch(() => window.open(fullVideoUrl, '_blank'))
+            .finally(() => { btnSpan.textContent = orig; dBtn.style.pointerEvents = 'auto'; dBtn.style.opacity = '1'; });
+        };
+        
+        downloadBtnsContainer.appendChild(dBtn);
+      });
     });
 
     const cBtn = document.createElement('button');
     cBtn.className = 'btn secondary-btn copy-btn';
     cBtn.innerHTML = `<span class="copy-icon">🔗</span><span id="copy-btn-text">Copy Links</span>`;
     cBtn.onclick = () => {
-      const allUrls = urls.map(u => (backendUrl ? `${backendUrl}${u}` : (window.location.origin + u))).join('\n');
-      navigator.clipboard.writeText(allUrls).then(() => {
+      navigator.clipboard.writeText(flatUrls.join('\n')).then(() => {
         linkCopiedMsg.style.display = 'block';
         cBtn.querySelector('#copy-btn-text').textContent = 'Copied!';
         setTimeout(() => { linkCopiedMsg.style.display = 'none'; cBtn.querySelector('#copy-btn-text').textContent = 'Copy Links'; }, 3000);
@@ -596,7 +668,8 @@ document.addEventListener('DOMContentLoaded', () => {
     downloadBtnsContainer.appendChild(cBtn);
 
     outputCard.style.display = 'block';
-    outputCard.scrollIntoView({ behavior: 'smooth' });
+    // Only scroll to it if not currently polling
+    // Actually, maybe don't auto scroll since it gets updated incrementally
   };
 
   // ═══════════════════════════════════════════════════════════
@@ -631,8 +704,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
       const backendUrl = backendUrlInput ? backendUrlInput.value.trim().replace(/\/$/, '') : '';
       
-      const itemUrls = item.urls || (item.url ? [item.url] : []);
-      const fullUrls = itemUrls.map(u => backendUrl ? `${backendUrl}${u}` : (window.location.origin + u));
+      let flatItemUrls = [];
+      const itemOutputs = item.urls || (item.url ? [item.url] : []);
+      itemOutputs.forEach(out => {
+         if (typeof out === 'object' && out !== null) {
+            flatItemUrls = flatItemUrls.concat(out.urls);
+         } else {
+            flatItemUrls.push(out);
+         }
+      });
+      const fullUrls = flatItemUrls.map(u => backendUrl ? `${backendUrl}${u}` : (window.location.origin + u));
 
       const statusClass = item.status === 'success' ? 'success' : 'failed';
       const statusLabel = item.status === 'success' ? '✓ Success' : '✗ Failed';

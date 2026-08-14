@@ -150,6 +150,478 @@ app.post('/api/test-kaggle', async (req, res) => {
   }
 });
 
+
+// Proxy for OpenAI-compatible Models
+app.post('/api/models', async (req, res) => {
+  const { base_url, api_key } = req.body;
+  if (!base_url || !api_key) return res.status(400).json({error: 'Base URL and API Key required'});
+  try {
+    let baseUrl = base_url.trim();
+    if (!baseUrl.endsWith('/v1')) {
+      if (baseUrl.endsWith('/')) baseUrl = baseUrl.slice(0, -1);
+      if (!baseUrl.endsWith('/v1') && !baseUrl.includes('v1')) {
+          baseUrl = baseUrl + '/v1';
+      }
+    }
+    const url = `${baseUrl}/models`;
+    const response = await fetch(url, { headers: { 'Authorization': `Bearer ${api_key}` } });
+    if (!response.ok) throw new Error(`HTTP ${response.status}: ${await response.text()}`);
+    const data = await response.json();
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({error: err.message});
+  }
+});
+
+
+// Trigger Kaggle notebook sequentially for titles
+app.post('/api/trigger-titles', upload.none(), async (req, res) => {
+  const {
+    titles,
+    ai_base_url,
+    ai_api_key,
+    ai_model,
+    aspect_ratio,
+    kokoro_voice,
+    caption_enabled,
+    caption_font_size,
+    caption_color,
+    caption_outline,
+    caption_y_pos,
+    video_speed,
+    hf_token_override,
+    kaggle_username,
+    kaggle_key,
+    use_z_image,
+    z_image_key,
+    use_bgm,
+    bgm_volume,
+    upscale_mode
+  } = req.body;
+
+  let titleList = [];
+  try {
+    titleList = JSON.parse(titles);
+  } catch (e) {
+    return res.status(400).json({ error: 'Titles must be a valid JSON array.' });
+  }
+  if (!titleList || titleList.length === 0) {
+    return res.status(400).json({ error: 'At least one title is required.' });
+  }
+
+  // Determine credentials to use
+  let finalUsername = (kaggle_username || '').trim();
+  let finalKey = (kaggle_key || '').trim();
+
+  // If no credentials passed, try to load from local file
+  if (!finalUsername || !finalKey) {
+    const userHome = process.env.USERPROFILE || process.env.HOME || 'C:\\Users\\DELL';
+    const paths = [
+      path.join(userHome, '.kaggle', 'kaggle.json'),
+      path.join(userHome, '.gemini', 'config', 'kaggle', 'kaggle.json')
+    ];
+    for (const p of paths) {
+      if (fs.existsSync(p)) {
+        try {
+          const creds = JSON.parse(fs.readFileSync(p, 'utf8'));
+          finalUsername = finalUsername || (creds.username || '').trim();
+          finalKey = finalKey || (creds.key || '').trim();
+        } catch (e) {}
+      }
+    }
+  }
+
+  if (!finalUsername || !finalKey) {
+    return res.status(400).json({ error: 'Kaggle Username and API Key are required. Please configure them.' });
+  }
+
+  if (!ai_base_url || !ai_api_key || !ai_model) {
+    return res.status(400).json({ error: 'AI Generator configuration (Base URL, API Key, Model) is required.' });
+  }
+
+  const jobId = 'job_' + Date.now();
+  jobs[jobId] = {
+    id: jobId,
+    status: 'queued',
+    username: finalUsername,
+    slug: 'youtube-truecrime-flux-zai-kokorotts-t4',
+    aspectRatio: aspect_ratio || '16:9',
+    log: ['[INFO] Batch job queued. Generating scripts for ' + titleList.length + ' titles...'],
+    startTime: Date.now(),
+    completedVideos: [],
+    titlesTotal: titleList.length,
+    titlesDone: 0
+  };
+
+  res.json({ jobId, success: true, message: 'Batch run initiated.' });
+
+  // Process sequentially in background
+  processBatchInBackground(jobId, titleList, req.body, finalUsername, finalKey);
+});
+
+const SYSTEM_PROMPT = `SYSTEM PROMPT: SHORTS CSV SCRIPT & IMAGE PROMPT GENERATOR
+You are an expert AI Video Producer and Prompt Engineer specializing in fast-paced YouTube Shorts and TikToks. Your sole task is to take any finance-related title or concept and generate a complete, production-ready script segmented sentence-by-sentence in an exact CSV format.
+
+You must strictly output ONLY the CSV data. Do not include any introductory text, pleasantries, explanations, markdown formatting outside of the CSV, or post-commentary. The response must start immediately with the column headers.
+
+1. CSV STRUCTURE & HEADERS
+Your output must be a valid, comma-separated CSV. You must use these exact headers (case-sensitive and spelled exactly as shown):
+
+"Serial number","image prompt","video prompt","voice over prompt"
+
+Every value in every row must be enclosed in double quotes ("). Any double quotes occurring inside the prompts must be escaped as double-double quotes ("") to maintain CSV validity.
+
+2. VOICE OVER PROMPT RULES (THE SCRIPT)
+The script must be segmented so that each row contains exactly one sentence. The script must follow the high-retention "Mr Yenom" scripting logic:
+
+Choose a Structural Blueprint:
+Blueprint A (Exponential Scaler): Start small and scale up by orders of magnitude (e.g., "$1 to $1 sextillion").
+Blueprint B (Hyperinflation Chaos Loop): A rapid chronological simulation of what happens if a naive economic solution is executed (e.g., "What if everyone got $1 billion?").
+Blueprint C (Simplified Story): Explain complex financial history using simple characters (e.g., Bob, the king) and transaction chains.
+Blueprint D (Loophole Reality Check): Describe an obscure financial loop, scale it up, then hit a sharp legal/logical reality check.
+Style and Pacing Constraints:
+Keep sentences under 10–12 words each.
+Use absolute simplicity (no dry economic jargon). Use concrete physical objects (burgers, yachts, Teslas, loaves of bread).
+Include conversational pacing markers like "Huh?" or "Wait..." at transition points.
+Use the abrupt, high-tension pivot ("But...") to shift from setup to chaos.
+The final sentence must be a dramatic punchline or twist that cuts off abruptly, creating a perfect looping video.
+3. IMAGE PROMPT RULES (THE VISUALS)
+For every sentence, you must generate a hyper-detailed, professional image generation prompt. Every image prompt must use a consistent, high-end design aesthetic based on the following template:
+
+"Multi-layered dimensional paper cut-out art, thick textured papercraft diorama, distinct drop shadows between crisp paper edges, stop-motion aesthetic, strictly purple black and white color palette. [HYPER-DETAILED SCENE DESCRIPTION]. Macro photography of layered paper art, soft studio lighting. Negative prompt: realistic, real life, 3D render, CGI, digital illustration, painting, drawing, cartoon, anime, humans, identifiable faces, bright colors, smooth gradients, flat"
+
+How to write the [HYPER-DETAILED SCENE DESCRIPTION]:
+It must be custom-tailored to the corresponding sentence of the script.
+Describe physical, concrete objects made of paper (e.g., "A giant paper coin breaking in half," "A paper man standing on a mountain of black paper cash," "A miniature paper supermarket with empty paper shelves").
+Describe the composition, textures, and layers clearly to guide the image generator. Do not use abstract concepts; translate them into physical, paper-based objects.
+4. VIDEO PROMPT RULES (THE MOTION)
+The video prompt column must contain exactly one motion keyword that dictates how the static image will be animated during editing (e.g., via ffmpeg). Use only these standard motion presets:
+
+zoom-in
+zoom-out
+pan-L→R
+pan-R→L
+tilt-up
+tilt-down
+Choose the motion that best fits the drama of the corresponding sentence (e.g., zoom-in for shock, pan-L→R for progressions, zoom-out to reveal scale).
+
+5. FEW-SHOT EXAMPLES
+Example 1: Housing Wealth Paradox
+Input Concept: Paying off your mortgage is a middle-class trap. Output CSV:
+
+"Serial number","image prompt","video prompt","voice over prompt"
+"1","Multi-layered dimensional paper cut-out art, thick textured papercraft diorama, distinct drop shadows between crisp paper edges, stop-motion aesthetic, strictly purple black and white color palette. A suburban house constructed entirely from layered paper, tightly wrapped in flat black paper chains under a purple and white textured paper sky. Macro photography of layered paper art, soft studio lighting. Negative prompt: realistic, real life, 3D render, CGI, digital illustration, painting, drawing, cartoon, anime, humans, identifiable faces, bright colors, smooth gradients, flat","zoom-in","If your ultimate financial goal in life is to completely pay off your house, you are secretly trapping yourself in the middle class."
+"2","Multi-layered dimensional paper cut-out art, thick textured papercraft diorama, distinct drop shadows between crisp paper edges, stop-motion aesthetic, strictly purple black and white color palette. A giant white paper key resting on top of a stack of dusty black paper mortgage documents with raised edges. Macro photography of layered paper art, soft studio lighting. Negative prompt: realistic, real life, 3D render, CGI, digital illustration, painting, drawing, cartoon, anime, humans, identifiable faces, bright colors, smooth gradients, flat","pan-L→R","For generations, we have been aggressively conditioned to believe that having a paid-off mortgage is the ultimate symbol of wealth and absolute freedom."
+"3","Multi-layered dimensional paper cut-out art, thick textured papercraft diorama, distinct drop shadows between crisp paper edges, stop-motion aesthetic, strictly purple black and white color palette. A large paper scale with a small paper house on one side completely outweighed by a massive mountain of purple paper coins on the other side. Macro photography of layered paper art, soft studio lighting. Negative prompt: realistic, real life, 3D render, CGI, digital illustration, painting, drawing, cartoon, anime, humans, identifiable faces, bright colors, smooth gradients, flat","zoom-out","But keeping all your net worth locked inside your walls is a massive financial mistake."
+Example 2: The Coin Melting Glitch (Blueprint D)
+Input Concept: The penny-melting arbitrage. Output CSV:
+
+"Serial number","image prompt","video prompt","voice over prompt"
+"1","Multi-layered dimensional paper cut-out art, thick textured papercraft diorama, distinct drop shadows between crisp paper edges, stop-motion aesthetic, strictly purple black and white color palette. A single copper-colored paper penny coin sitting in the center of a black paper laboratory beaker with tiny paper bubbles rising. Macro photography of layered paper art, soft studio lighting. Negative prompt: realistic, real life, 3D render, CGI, digital illustration, painting, drawing, cartoon, anime, humans, identifiable faces, bright colors, smooth gradients, flat","zoom-in","One cent actually contains about four cents worth of physical metal."
+"2","Multi-layered dimensional paper cut-out art, thick textured papercraft diorama, distinct drop shadows between crisp paper edges, stop-motion aesthetic, strictly purple black and white color palette. A sharp metal-like paper crucible pouring glowing purple liquid paper metal into a series of miniature paper coin molds. Macro photography of layered paper art, soft studio lighting. Negative prompt: realistic, real life, 3D render, CGI, digital illustration, painting, drawing, cartoon, anime, humans, identifiable faces, bright colors, smooth gradients, flat","pan-L→R","That means if you melt a single penny, the metal is worth quadruple."
+"3","Multi-layered dimensional paper cut-out art, thick textured papercraft diorama, distinct drop shadows between crisp paper edges, stop-motion aesthetic, strictly purple black and white color palette. A massive wooden crate overflowing with thousands of tiny white and purple paper coins, with a bold label reading ""$100"". Macro photography of layered paper art, soft studio lighting. Negative prompt: realistic, real life, 3D render, CGI, digital illustration, painting, drawing, cartoon, anime, humans, identifiable faces, bright colors, smooth gradients, flat","zoom-out","With just one dollar, you can buy one hundred of these penny coins."
+"4","Multi-layered dimensional paper cut-out art, thick textured papercraft diorama, distinct drop shadows between crisp paper edges, stop-motion aesthetic, strictly purple black and white color palette. A stylized paper courtroom scene with a large black paper judge gavel striking a desk, casting a long shadow over a paper jail cell door. Macro photography of layered paper art, soft studio lighting. Negative prompt: realistic, real life, 3D render, CGI, digital illustration, painting, drawing, cartoon, anime, humans, identifiable faces, bright colors, smooth gradients, flat","zoom-in","But repeating this trick ten times gets you a million dollars and a lifetime in federal prison."
+6. GENERATION FLOW
+When you receive a title or concept:
+
+Identify the most compelling angle and match it to a Blueprint.
+Draft a high-retention, 10–14 sentence script.
+For each sentence, construct the hyper-detailed papercraft image prompt and select the ideal video motion preset.
+Output the results strictly in CSV format, starting directly with the headers, and with absolutely no pre- or post-commentary.
+`;
+
+async function generateCsvWithAI(title, ai_base_url, ai_api_key, ai_model) {
+  let baseUrl = ai_base_url.trim();
+  if (!baseUrl.endsWith('/v1')) {
+    if (baseUrl.endsWith('/')) baseUrl = baseUrl.slice(0, -1);
+    if (!baseUrl.endsWith('/v1') && !baseUrl.includes('v1')) {
+        baseUrl = baseUrl + '/v1';
+    }
+  }
+  const url = `${baseUrl}/chat/completions`;
+  
+  const payload = {
+    model: ai_model,
+    messages: [
+      { role: 'system', content: SYSTEM_PROMPT },
+      { role: 'user', content: `TITLE / CONCEPT: ${title}\n\nPlease generate the CSV script.` }
+    ],
+    temperature: 0.7
+  };
+
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${ai_api_key}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(payload)
+  });
+
+  if (!response.ok) {
+    const txt = await response.text();
+    throw new Error(`AI API Error (${response.status}): ${txt}`);
+  }
+
+  const data = await response.json();
+  let content = data.choices[0].message.content;
+  // Clean up markdown code blocks if any
+  content = content.replace(/^\s*```(csv)?/i, '').replace(/```\s*$/, '').trim();
+  return content;
+}
+
+// Background batch processing
+async function processBatchInBackground(jobId, titles, config, finalUsername, finalKey) {
+  const job = jobs[jobId];
+  
+  for (let i = 0; i < titles.length; i++) {
+    const title = titles[i].trim();
+    if (!title) continue;
+    
+    job.status = 'running';
+    job.log.push(`[INFO] [Video ${i+1}/${titles.length}] Generating AI script for: ${title}`);
+    
+    let csvData;
+    try {
+      csvData = await generateCsvWithAI(title, config.ai_base_url, config.ai_api_key, config.ai_model);
+      job.log.push(`[SUCCESS] CSV Script generated for ${title}.`);
+    } catch (e) {
+      job.log.push(`[ERROR] Failed to generate script for ${title}: ${e.message}`);
+      continue; // Skip to next title
+    }
+
+    job.log.push(`[INFO] Starting Kaggle pipeline for: ${title}`);
+    
+    // We run the kaggle logic for this single CSV
+    const csvBase64 = Buffer.from(csvData, 'utf-8').toString('base64');
+    
+    try {
+      const outputUrls = await runKagglePipelineSync(job, title, csvBase64, config, finalUsername, finalKey);
+      if (outputUrls && outputUrls.length > 0) {
+        // Send webhook instantly
+        const webhookPayload = {
+          title: title,
+          download_urls: outputUrls
+        };
+        try {
+          await fetch("https://airpyk98-youtube-n8n.hf.space/webhook/drivon-yt", {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(webhookPayload)
+          });
+          job.log.push(`[SUCCESS] Webhook sent for ${title}`);
+        } catch (we) {
+          job.log.push(`[WARN] Failed to send webhook for ${title}: ${we.message}`);
+        }
+
+        job.completedVideos.push({
+          title: title,
+          urls: outputUrls
+        });
+      }
+    } catch (e) {
+      job.log.push(`[ERROR] Kaggle pipeline failed for ${title}: ${e.message}`);
+    }
+    
+    job.titlesDone = i + 1;
+  }
+  
+  job.status = 'complete';
+  job.log.push(`[SUCCESS] Batch processing complete! ${job.titlesDone}/${titles.length} finished.`);
+}
+
+// Re-usable synchronous Kaggle trigger
+async function runKagglePipelineSync(job, title, csvBase64, config, finalUsername, finalKey) {
+  const tempDir = path.join(__dirname, 'temp_' + job.id + '_' + Date.now());
+  fs.mkdirSync(tempDir, { recursive: true });
+
+  // Sanitize title for filename
+  const safeTitle = title.replace(/[^a-zA-Z0-9_-]/g, '_').substring(0, 50);
+
+  // Write credentials
+  fs.writeFileSync(path.join(tempDir, 'kaggle.json'), JSON.stringify({ username: finalUsername, key: finalKey }, null, 2), 'utf8');
+  if (finalKey.startsWith('KGAT_')) {
+    fs.writeFileSync(path.join(tempDir, 'access_token'), finalKey.trim(), 'utf8');
+  }
+
+  const env = {
+    KAGGLE_USERNAME: finalUsername,
+    KAGGLE_KEY: finalKey,
+    KAGGLE_API_TOKEN: finalKey,
+    KAGGLE_CONFIG_DIR: tempDir
+  };
+
+  // Modify notebook
+  let notebookData;
+  let notebookPath = BASE_NOTEBOOK_PATH;
+  if (!fs.existsSync(notebookPath)) {
+    notebookPath = path.join(__dirname, 'Youtube-Truecrime-FLUX-Zai-KokoroTTS-T4.ipynb');
+  }
+  const notebookRaw = fs.readFileSync(notebookPath, 'utf8');
+  notebookData = JSON.parse(notebookRaw);
+
+  const dataLoaderCell = {
+    cell_type: 'code',
+    execution_count: null,
+    id: 'csv_data_loader',
+    metadata: {},
+    outputs: [],
+    source: [
+      "# ── Auto-generated by Web Trigger ───────────────────────────────────────────\n",
+      "import base64\n",
+      "import os\n",
+      `csv_b64 = "${csvBase64}"\n`,
+      "csv_data = base64.b64decode(csv_b64).decode('utf-8')\n",
+      "with open('input_data.csv', 'w', encoding='utf-8') as f:\n",
+      "    f.write(csv_data)\n",
+      "print('--> CSV loaded successfully as input_data.csv')\n"
+    ]
+  };
+  notebookData.cells.unshift(dataLoaderCell);
+
+  let configCellIndex = -1;
+  for (let i = 0; i < notebookData.cells.length; i++) {
+    const cell = notebookData.cells[i];
+    if (cell.cell_type === 'code' && cell.source.some(line => line.includes('USER CONFIGURATION'))) {
+      configCellIndex = i;
+      break;
+    }
+  }
+
+  let cellText = notebookData.cells[configCellIndex].source.join("");
+  cellText = cellText.replace(/ASPECT_RATIO\s*=\s*['"][^'"]*['"]/, `ASPECT_RATIO   = "${config.aspect_ratio || '16:9'}"`);
+  cellText = cellText.replace(/KOKORO_VOICE\s*=\s*['"][^'"]*['"]/, `KOKORO_VOICE   = "${config.kokoro_voice || 'am_michael'}"`);
+  cellText = cellText.replace(/CAPTION_ENABLED\s*=\s*(True|False)/i, `CAPTION_ENABLED   = ${config.caption_enabled === 'true' ? 'True' : 'False'}`);
+  cellText = cellText.replace(/CAPTION_FONT_SIZE\s*=\s*\d+/, `CAPTION_FONT_SIZE = ${parseInt(config.caption_font_size) || 22}`);
+  cellText = cellText.replace(/CAPTION_COLOR\s*=\s*['"][^'"]*['"]/, `CAPTION_COLOR     = "${config.caption_color || 'white'}"`);
+  cellText = cellText.replace(/CAPTION_OUTLINE\s*=\s*\d+/, `CAPTION_OUTLINE   = ${parseInt(config.caption_outline) || 4}`);
+  cellText = cellText.replace(/CAPTION_Y_POS\s*=\s*[0-9.]+/, `CAPTION_Y_POS     = ${parseFloat(config.caption_y_pos) || 0.80}`);
+  cellText = cellText.replace(/VIDEO_SPEED\s*=\s*[0-9.]+/, `VIDEO_SPEED    = ${parseFloat(config.video_speed) || 1.1}`);
+  cellText = cellText.replace(/HF_TOKEN_OVERRIDE\s*=\s*['"][^'"]*['"]/, `HF_TOKEN_OVERRIDE = "${config.hf_token_override || ''}"`);
+  cellText = cellText.replace(/USE_Z_IMAGE\s*=\s*(True|False)/i, `USE_Z_IMAGE = ${config.use_z_image === 'true' ? 'True' : 'False'}`);
+  cellText = cellText.replace(/Z_IMAGE_KEY\s*=\s*['"][^'"]*['"]/, `Z_IMAGE_KEY = "${config.z_image_key || ''}"`);
+  cellText = cellText.replace(/USE_BGM\s*=\s*(True|False)/i, `USE_BGM = ${config.use_bgm === 'true' ? 'True' : 'False'}`);
+  cellText = cellText.replace(/BGM_VOLUME\s*=\s*[0-9.]+/, `BGM_VOLUME = ${parseFloat(config.bgm_volume) || 0.12}`);
+  cellText = cellText.replace(/CSV_DATA_URL\s*=\s*['"][^'"]*['"]/, `CSV_DATA_URL   = "input_data.csv"\nUPSCALE_MODE = "${config.upscale_mode || 'none'}"`);
+  cellText = cellText.replace(
+    'df = pd.read_csv(CSV_DATA_URL, storage_options={"User-Agent": "Mozilla/5.0"})',
+    'df = pd.read_csv(CSV_DATA_URL) if not CSV_DATA_URL.startswith("http") else pd.read_csv(CSV_DATA_URL, storage_options={"User-Agent": "Mozilla/5.0"})'
+  );
+  notebookData.cells[configCellIndex].source = cellText.match(/[^\n]*\n|[^\n]+/g) || [];
+
+  // Write modified notebook
+  const notebookFilename = 'Youtube-Truecrime-FLUX-Zai-KokoroTTS-T4.ipynb';
+  fs.writeFileSync(path.join(tempDir, notebookFilename), JSON.stringify(notebookData, null, 2), 'utf8');
+
+  // Slug logic
+  const kernelSlug = `${finalUsername.toLowerCase()}/youtube-truecrime-flux-zai-kokorotts-t4`;
+
+  const metadata = {
+    id: kernelSlug,
+    title: 'Youtube-Truecrime-FLUX-Zai-KokoroTTS-T4',
+    code_file: notebookFilename,
+    language: 'python',
+    kernel_type: 'notebook',
+    is_private: true,
+    enable_gpu: true,
+    accelerator: 'NvidiaTeslaT4',
+    enable_internet: true,
+    dataset_sources: [],
+    competition_sources: [],
+    kernel_sources: []
+  };
+  fs.writeFileSync(path.join(tempDir, 'kernel-metadata.json'), JSON.stringify(metadata, null, 2), 'utf8');
+
+  const pushCmd = `kaggle kernels push -p "${tempDir}" --accelerator NvidiaTeslaT4`;
+  const pushResult = await runCmd(pushCmd, env);
+  if (!pushResult.success) {
+    throw new Error(`Kaggle CLI push failed: ${pushResult.error}`);
+  }
+  job.log.push(`[INFO] Kernel pushed for ${safeTitle}. Waiting for Kaggle...`);
+
+  // Wait for Kaggle to finish
+  const statusCmd = `kaggle kernels status ${kernelSlug}`;
+  
+  await new Promise((resolve, reject) => {
+    const timer = setInterval(async () => {
+      const res = await runCmd(statusCmd, env);
+      if (res.success) {
+        const output = res.stdout.trim().toLowerCase();
+        job.log.push(`[POLL ${safeTitle}] ${output}`);
+        if (output.includes('complete') || output.includes('error') || output.includes('cancel')) {
+          clearInterval(timer);
+          if (output.includes('complete')) {
+            resolve();
+          } else {
+            reject(new Error(`Kaggle ended with status: ${output}`));
+          }
+        }
+      } else {
+         job.log.push(`[WARN] Polling failed: ${res.error}`);
+      }
+    }, 15000);
+  });
+
+  // Download outputs
+  const downloadDir = path.join(tempDir, 'output');
+  fs.mkdirSync(downloadDir, { recursive: true });
+  const dlCmd = `kaggle kernels output ${kernelSlug} -p "${downloadDir}"`;
+  const dlRes = await runCmd(dlCmd, env);
+  if (!dlRes.success) {
+    throw new Error(`Failed to download output: ${dlRes.error}`);
+  }
+
+  // Find MP4s
+  const findAllMp4s = (dir) => {
+    let results = [];
+    if (!fs.existsSync(dir)) return results;
+    const files = fs.readdirSync(dir);
+    for (const file of files) {
+      const fullPath = path.join(dir, file);
+      if (fs.statSync(fullPath).isDirectory()) {
+        if (file !== 'effect_videos' && file !== 'stitched') {
+          results = results.concat(findAllMp4s(fullPath));
+        }
+      } else if (file.endsWith('.mp4')) {
+        results.push(fullPath);
+      }
+    }
+    return results;
+  };
+
+  let videoFiles = [];
+  const outputsFolder = path.join(downloadDir, 'automated_channel_outputs');
+  if (fs.existsSync(outputsFolder)) {
+    videoFiles = fs.readdirSync(outputsFolder).filter(f => f.endsWith('.mp4')).map(f => path.join(outputsFolder, f));
+  }
+  if (videoFiles.length === 0) {
+    videoFiles = findAllMp4s(downloadDir);
+  }
+
+  if (videoFiles.length === 0) {
+    throw new Error('No MP4 output files found.');
+  }
+
+  const urls = [];
+  videoFiles.forEach((vFile, idx) => {
+    const isUpscaled = vFile.includes('upscaled');
+    // Sanitize title for file name to avoid injection
+    const destFilename = `${safeTitle}_${isUpscaled ? 'upscaled' : 'normal'}_${idx}.mp4`;
+    const destPath = path.join(OUTPUTS_DIR, destFilename);
+    fs.copyFileSync(vFile, destPath);
+    // Determine base URL dynamically based on current environment or standard paths
+    // Since backend isn't aware of its public HF url easily, we just store relative paths 
+    // and frontend forms full URL. But webhook needs absolute URL. Let's pass the host in config later or use relative and let frontend handle?
+    // Wait, webhook is fired from backend.
+    urls.push(`/outputs/${destFilename}`); 
+  });
+  
+  // Cleanup temp
+  fs.rmSync(tempDir, { recursive: true, force: true });
+  
+  return urls;
+}
+
 // Trigger a Kaggle notebook run
 app.post('/api/trigger', upload.single('csvFile'), async (req, res) => {
   const {
@@ -315,8 +787,7 @@ app.post('/api/trigger', upload.single('csvFile'), async (req, res) => {
     cellText = cellText.replace(/Z_IMAGE_KEY\s*=\s*['"][^'"]*['"]/, `Z_IMAGE_KEY = "${z_image_key || ''}"`);
     cellText = cellText.replace(/USE_BGM\s*=\s*(True|False)/i, `USE_BGM = ${use_bgm === 'true' ? 'True' : 'False'}`);
     cellText = cellText.replace(/BGM_VOLUME\s*=\s*[0-9.]+/, `BGM_VOLUME = ${parseFloat(bgm_volume) || 0.12}`);
-    cellText = cellText.replace(/CSV_DATA_URL\s*=\s*['"][^'"]*['"]/, `CSV_DATA_URL   = "input_data.csv"`);
-    cellText += `\nUPSCALE_MODE = "${upscale_mode || 'none'}"\n`;
+    cellText = cellText.replace(/CSV_DATA_URL\s*=\s*['"][^'"]*['"]/, `CSV_DATA_URL   = "input_data.csv"\nUPSCALE_MODE = "${upscale_mode || 'none'}"`);
     // Dynamic bypass for Pandas storage_options error on local file read
     cellText = cellText.replace(
       'df = pd.read_csv(CSV_DATA_URL, storage_options={"User-Agent": "Mozilla/5.0"})',
@@ -593,6 +1064,10 @@ app.get('/api/status/:jobId', (req, res) => {
     log: job.log,
     aspectRatio: job.aspectRatio,
     videoUrl: job.videoUrl || null,
+    videoUrls: job.videoUrls || [],
+    completedVideos: job.completedVideos || [],
+    titlesTotal: job.titlesTotal || 0,
+    titlesDone: job.titlesDone || 0,
     duration: Math.round((Date.now() - job.startTime) / 1000)
   });
 });
@@ -604,22 +1079,13 @@ async function pollJobStatus(jobId) {
 
   const kernelSlug = `${job.username}/${job.slug}`;
   const statusCmd = `kaggle kernels status ${kernelSlug}`;
-  
-  let retryCount = 0;
-  const maxRetries = 120; // 120 * 15s = 30 minutes max execution time
 
   const timer = setInterval(async () => {
-    if (job.status === 'complete' || job.status === 'error' || retryCount >= maxRetries) {
+    if (job.status === 'complete' || job.status === 'error') {
       clearInterval(timer);
-      if (retryCount >= maxRetries && job.status === 'running') {
-        job.status = 'error';
-        job.log.push('[ERROR] Job timed out after 30 minutes.');
-        cleanupJobTemp(jobId);
-      }
       return;
     }
 
-    retryCount++;
     const res = await runCmd(statusCmd, job.env);
 
     if (res.success) {
@@ -684,7 +1150,9 @@ async function downloadOutputs(jobId) {
       for (const file of files) {
         const fullPath = path.join(dir, file);
         if (fs.statSync(fullPath).isDirectory()) {
-          results = results.concat(findAllMp4s(fullPath));
+          if (file !== 'effect_videos' && file !== 'stitched') {
+            results = results.concat(findAllMp4s(fullPath));
+          }
         } else if (file.endsWith('.mp4')) {
           results.push(fullPath);
         }
