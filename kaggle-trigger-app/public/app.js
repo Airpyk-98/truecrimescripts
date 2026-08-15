@@ -359,16 +359,16 @@ document.addEventListener('DOMContentLoaded', () => {
     formData.append('ai_model', aiModel);
 
     const OMNIVOICE_PRESETS = {
-      'male_truecrime': 'male, deep voice, American accent, storytelling, dramatic, calm',
-      'male_viral': 'young male, American accent, energetic, fast-paced, engaging',
-      'male_documentary': 'male, British accent, authoritative, deep, cinematic documentary',
-      'female_suspense': 'female, American accent, calm, mysterious, suspenseful, deep voice',
-      'female_dynamic': 'young female, American accent, dynamic, expressive, engaging'
+      'male_truecrime': 'male, young adult, american accent, low pitch',
+      'male_viral': 'male, young adult, american accent, moderate pitch',
+      'male_documentary': 'male, middle-aged, british accent, low pitch',
+      'female_suspense': 'female, young adult, american accent, low pitch',
+      'female_dynamic': 'female, young adult, american accent, moderate pitch'
     };
 
     const ttsEngine = ttsEngineSelect ? ttsEngineSelect.value : 'omnivoice';
     const omniPreset = omnivoicePresetSelect ? omnivoicePresetSelect.value : 'male_truecrime';
-    let omniInstruct = OMNIVOICE_PRESETS[omniPreset] || 'male, deep voice, American accent, storytelling, dramatic, calm';
+    let omniInstruct = OMNIVOICE_PRESETS[omniPreset] || 'male, young adult, american accent, low pitch';
     if (omniPreset === 'custom' && omnivoiceCustomInstructInput) {
       omniInstruct = omnivoiceCustomInstructInput.value.trim() || omniInstruct;
     }

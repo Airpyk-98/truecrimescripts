@@ -641,16 +641,50 @@ def run_phase_2_audio():
     sample_rate = 24000
     final_audio_array = None
     
+    def sanitize_omni_instruct(raw_str):
+        import re
+        valid_items = [
+            "american accent", "australian accent", "british accent", "canadian accent",
+            "child", "chinese accent", "elderly", "female", "high pitch", "indian accent",
+            "japanese accent", "korean accent", "low pitch", "male", "middle-aged",
+            "moderate pitch", "portuguese accent", "russian accent", "teenager",
+            "very high pitch", "very low pitch", "whisper", "young adult"
+        ]
+        synonyms = {
+            "deep": "low pitch", "deep voice": "low pitch", "baritone": "low pitch", "bass": "very low pitch",
+            "high": "high pitch", "young": "young adult", "boy": "male, young adult", "girl": "female, young adult",
+            "man": "male", "woman": "female", "british": "british accent", "american": "american accent",
+            "australian": "australian accent", "canadian": "canadian accent", "indian": "indian accent",
+            "russian": "russian accent", "old": "elderly", "authoritative": "middle-aged, low pitch",
+            "cinematic documentary": "low pitch", "storytelling": "moderate pitch", "dramatic": "low pitch"
+        }
+        s = str(raw_str).lower()
+        for k, v in synonyms.items():
+            s = re.sub(r'\\b' + re.escape(k) + r'\\b', v, s)
+        found = []
+        for chunk in s.split(","):
+            c = chunk.strip()
+            if c in valid_items and c not in found:
+                found.append(c)
+        if not found:
+            for vi in valid_items:
+                if vi in s and vi not in found:
+                    found.append(vi)
+        if not found:
+            found = ["male", "young adult", "american accent", "low pitch"]
+        return ", ".join(found)
+
     if tts_engine == "omnivoice":
+        cleaned_instruct = sanitize_omni_instruct(omni_instruct)
         print(f"--> Generating single continuous audio with OmniVoice...")
-        print(f"    Instruct description: '{omni_instruct}'")
+        print(f"    Raw Instruct: '{omni_instruct}' -> Sanitized Valid Tags: '{cleaned_instruct}'")
         try:
             from omnivoice import OmniVoice
             import torch
             model = OmniVoice.from_pretrained("k2-fsa/OmniVoice", device_map="cuda", dtype=torch.float16)
             final_audio_array = model.generate(
                 text=full_text,
-                instruct=omni_instruct,
+                instruct=cleaned_instruct,
                 num_step=16
             )
             print("--> OmniVoice synthesis successful!")
@@ -679,7 +713,10 @@ def run_phase_2_audio():
     
     print("--> Transcribing audio with Whisper for millisecond word-level timestamps...")
     import whisper_timestamped as whisper
-    w_model = whisper.load_model("base", device="cuda" if os.environ.get("CUDA_VISIBLE_DEVICES") or hasattr(final_audio_array, "cpu") else "cpu")
+    import torch
+    whisper_device = "cuda" if torch.cuda.is_available() else "cpu"
+    print(f"--> Running Whisper on device: {whisper_device}")
+    w_model = whisper.load_model("base", device=whisper_device)
     w_audio = whisper.load_audio(final_audio_path)
     result = whisper.transcribe(w_model, w_audio, language="en")
     
