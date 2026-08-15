@@ -778,4 +778,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Initial load
   loadHistory();
+  
+  if (aiApiKeyInput.value.trim() && aiBaseUrlInput.value.trim()) {
+      fetchModelsBtn.click();
+  }
 });
