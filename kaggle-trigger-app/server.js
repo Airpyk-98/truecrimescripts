@@ -399,9 +399,10 @@ async function processBatchInBackground(jobId, titles, config, finalUsername, fi
       const outputUrls = await runKagglePipelineSync(job, title, csvBase64, config, finalUsername, finalKey);
       if (outputUrls && outputUrls.length > 0) {
         // Send webhook instantly
+        const absoluteUrls = outputUrls.map(url => `https://epic98-truecrime-video-generator.hf.space${url}`);
         const webhookPayload = {
           title: title,
-          download_urls: outputUrls
+          download_urls: absoluteUrls
         };
         try {
           await fetch("https://airpyk98-youtube-n8n.hf.space/webhook/drivon-yt", {
