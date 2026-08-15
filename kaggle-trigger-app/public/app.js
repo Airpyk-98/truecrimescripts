@@ -29,6 +29,12 @@ document.addEventListener('DOMContentLoaded', () => {
   const titlesInput = document.getElementById('titles-input');
 
   const aspectRatioSelect = document.getElementById('aspect-ratio');
+  const ttsEngineSelect = document.getElementById('tts-engine');
+  const omnivoicePresetGroup = document.getElementById('omnivoice-preset-group');
+  const omnivoicePresetSelect = document.getElementById('omnivoice-preset');
+  const omnivoiceCustomGroup = document.getElementById('omnivoice-custom-group');
+  const omnivoiceCustomInstructInput = document.getElementById('omnivoice-custom-instruct');
+  const kokoroVoiceGroup = document.getElementById('kokoro-voice-group');
   const kokoroVoiceSelect = document.getElementById('kokoro-voice');
   const videoSpeedInput = document.getElementById('video-speed');
   const speedVal = document.getElementById('speed-val');
@@ -224,6 +230,22 @@ document.addEventListener('DOMContentLoaded', () => {
     bgmVolumeGroup.style.display = useBgmToggle.checked ? 'flex' : 'none';
   });
 
+  // TTS Engine & Voice Presets Toggle
+  ttsEngineSelect.addEventListener('change', () => {
+    const isOmni = ttsEngineSelect.value === 'omnivoice';
+    omnivoicePresetGroup.style.display = isOmni ? 'block' : 'none';
+    kokoroVoiceGroup.style.display = isOmni ? 'none' : 'block';
+    if (isOmni) {
+      omnivoiceCustomGroup.style.display = omnivoicePresetSelect.value === 'custom' ? 'block' : 'none';
+    } else {
+      omnivoiceCustomGroup.style.display = 'none';
+    }
+  });
+
+  omnivoicePresetSelect.addEventListener('change', () => {
+    omnivoiceCustomGroup.style.display = omnivoicePresetSelect.value === 'custom' ? 'block' : 'none';
+  });
+
   useZImageToggle.addEventListener('change', () => {
     zImageKeyGroup.style.display = useZImageToggle.checked ? 'block' : 'none';
   });
@@ -336,7 +358,25 @@ document.addEventListener('DOMContentLoaded', () => {
     formData.append('ai_api_key', aiApiKey);
     formData.append('ai_model', aiModel);
 
+    const OMNIVOICE_PRESETS = {
+      'male_truecrime': 'male, deep voice, American accent, storytelling, dramatic, calm',
+      'male_viral': 'young male, American accent, energetic, fast-paced, engaging',
+      'male_documentary': 'male, British accent, authoritative, deep, cinematic documentary',
+      'female_suspense': 'female, American accent, calm, mysterious, suspenseful, deep voice',
+      'female_dynamic': 'young female, American accent, dynamic, expressive, engaging'
+    };
+
+    const ttsEngine = ttsEngineSelect ? ttsEngineSelect.value : 'omnivoice';
+    const omniPreset = omnivoicePresetSelect ? omnivoicePresetSelect.value : 'male_truecrime';
+    let omniInstruct = OMNIVOICE_PRESETS[omniPreset] || 'male, deep voice, American accent, storytelling, dramatic, calm';
+    if (omniPreset === 'custom' && omnivoiceCustomInstructInput) {
+      omniInstruct = omnivoiceCustomInstructInput.value.trim() || omniInstruct;
+    }
+
     formData.append('aspect_ratio', aspectRatioSelect.value);
+    formData.append('tts_engine', ttsEngine);
+    formData.append('omnivoice_preset', omniPreset);
+    formData.append('omnivoice_instruct', omniInstruct);
     formData.append('kokoro_voice', kokoroVoiceSelect.value);
     formData.append('caption_enabled', captionEnabledCheckbox.checked ? 'true' : 'false');
     formData.append('caption_font_size', captionFontSizeInput.value);

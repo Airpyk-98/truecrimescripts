@@ -193,7 +193,29 @@
                     </select>
                   </div>
                   <div class="input-group">
-                    <label for="kokoro-voice">Voice Model</label>
+                    <label for="tts-engine">TTS Voice Engine</label>
+                    <select id="tts-engine">
+                      <option value="omnivoice" selected>OmniVoice (Zero-Shot / Storytelling - Default)</option>
+                      <option value="kokoro">Kokoro TTS (Lightweight)</option>
+                    </select>
+                  </div>
+                  <div class="input-group" id="omnivoice-preset-group">
+                    <label for="omnivoice-preset">OmniVoice Voice Preset</label>
+                    <select id="omnivoice-preset">
+                      <option value="male_truecrime" selected>🎙️ Deep Male Storyteller (True Crime / Suspense)</option>
+                      <option value="male_viral">🔥 Energetic Young Male (Viral Shorts / RWJ Style)</option>
+                      <option value="male_documentary">🏛️ British Male Narrator (Cinematic Documentary)</option>
+                      <option value="female_suspense">🕵️ Dark Female Mystery (Calm & Suspenseful)</option>
+                      <option value="female_dynamic">⚡ Expressive Female Storyteller (Dynamic & Engaging)</option>
+                      <option value="custom">✏️ Custom Voice Design / Instruct...</option>
+                    </select>
+                  </div>
+                  <div class="input-group" id="omnivoice-custom-group" style="display: none;">
+                    <label for="omnivoice-custom-instruct">Custom Voice Description (Instruct)</label>
+                    <input type="text" id="omnivoice-custom-instruct" placeholder="e.g., male, raspy deep voice, southern accent, intense whisper">
+                  </div>
+                  <div class="input-group" id="kokoro-voice-group" style="display: none;">
+                    <label for="kokoro-voice">Kokoro Voice Model</label>
                     <select id="kokoro-voice">
                       <option value="am_michael">am_michael (Energetic male - Default)</option>
                       <option value="am_echo">am_echo (Vibrant male)</option>
