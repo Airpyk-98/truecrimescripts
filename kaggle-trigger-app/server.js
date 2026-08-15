@@ -281,11 +281,10 @@ Every value in every row must be enclosed in double quotes ("). Any double quote
 
 3. IMAGE PROMPT RULES (THE VISUALS)
 - For every sentence, generate a hyper-detailed, professional image generation prompt. 
-- Use a gritty, cinematic, documentary style. 
-- Every image prompt must include: "hyper realistic, 8K ultra detail, photorealistic, cinematic, documentary style, dark and gritty, soft studio lighting".
-- Describe the specific scene, lighting, mood, and camera angle.
+- Use the following exact aesthetic: "Dimensional paper cut-out art, thick textured papercraft diorama, distinct drop shadows between crisp paper edges, stop-motion aesthetic, strictly purple black and white color palette."
+- Describe physical, concrete objects made of paper (e.g., "A paper man standing on a mountain of black paper cash," "A miniature paper supermarket with empty paper shelves").
 - Never depict real identifiable people directly. Use symbolic imagery for victims.
-- End every image prompt with: "Negative prompt: cartoon, anime, illustration, 3D render, CGI, blurry, distorted, deformed, watermark, text overlay, pixelated, bright colors, smooth gradients, flat"
+- End every image prompt with: "Negative prompt: realistic, real life, 3D render, CGI, digital illustration, painting, drawing, cartoon, anime, humans, identifiable faces, bright colors, smooth gradients, flat, multi-layered"
 
 4. VIDEO PROMPT RULES (THE MOTION)
 The video prompt column must contain exactly one motion keyword. Rotate randomly through these standard motion presets (do not repeat consecutively):
