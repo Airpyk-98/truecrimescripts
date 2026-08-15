@@ -379,7 +379,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // ═══════════════════════════════════════════════════════════
   const setPipelineRunning = (isRunning) => {
     triggerPipelineBtn.disabled = isRunning;
-    csvFileInput.disabled = isRunning;
+    titlesInput.disabled = isRunning;
 
     if (isRunning) {
       btnText.textContent = 'Pipeline Active...';
