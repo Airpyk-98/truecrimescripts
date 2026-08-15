@@ -312,7 +312,7 @@ document.addEventListener('DOMContentLoaded', () => {
   triggerPipelineBtn.addEventListener('click', () => {
     const rawTitles = titlesInput.value.trim();
     if (!rawTitles) { alert('Please paste at least one video title.'); return; }
-    const titlesArray = rawTitles.split('\\n').map(t => t.trim()).filter(t => t.length > 0);
+    const titlesArray = rawTitles.split('\n').map(t => t.trim()).filter(t => t.length > 0);
     if (titlesArray.length === 0) { alert('No valid titles found.'); return; }
     
     const username = kaggleUsernameInput.value.trim();
