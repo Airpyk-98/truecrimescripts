@@ -727,44 +727,65 @@ def run_phase_2_audio():
             
     print(f"--> Whisper transcribed {len(words)} total words across {len(df)} rows.")
     
-    word_idx = 0
     total_words = len(words)
     total_audio_sec = len(final_audio_array) / sample_rate
     
+    # 1. Map CSV rows to Whisper word indices
+    row_boundaries = []
+    current_cursor = 0
     for idx, row in df.iterrows():
-        sn = str(row["Serial number"])
         sentence = str(row["voice over prompt"])
         sentence_words = len(sentence.split())
         
-        if word_idx < total_words:
-            start_time = words[word_idx]["start"]
-            end_idx = min(word_idx + sentence_words - 1, total_words - 1)
-            end_time = words[end_idx]["end"]
-            
-            if idx == len(df) - 1:
-                end_time = max(end_time, total_audio_sec)
-                
-            duration = max(end_time - start_time, 0.5)
-            
-            start_sample = int(start_time * sample_rate)
-            end_sample = min(int(end_time * sample_rate), len(final_audio_array))
-            clip_array = final_audio_array[start_sample:end_sample]
-            
-            audio_path = os.path.join(AUDIO_DIR, f"{sn}.wav")
-            sf.write(audio_path, clip_array, sample_rate)
-            
-            df.at[idx, "audio_length"] = round(duration, 3)
-            print(f"  Row {sn}: [{start_time:.2f}s -> {end_time:.2f}s] ({duration:.2f}s) -> {audio_path}")
-            word_idx = end_idx + 1
+        if current_cursor < total_words:
+            first_w_idx = current_cursor
+            last_w_idx = min(current_cursor + sentence_words - 1, total_words - 1)
+            row_boundaries.append((first_w_idx, last_w_idx))
+            current_cursor = last_w_idx + 1
         else:
-            audio_path = os.path.join(AUDIO_DIR, f"{sn}.wav")
-            clip_array = np.zeros((sample_rate * 2,), dtype=np.float32)
-            sf.write(audio_path, clip_array, sample_rate)
-            df.at[idx, "audio_length"] = 2.0
-            print(f"  Row {sn}: fallback 2.0s -> {audio_path}")
+            row_boundaries.append((None, None))
+            
+    # 2. Compute contiguous non-overlapping split points at the midpoint of inter-sentence silences
+    split_points = [0.0]
+    for i in range(len(row_boundaries) - 1):
+        curr_last = row_boundaries[i][1]
+        next_first = row_boundaries[i+1][0]
+        
+        if curr_last is not None and next_first is not None:
+            curr_end_time = words[curr_last]["end"]
+            next_start_time = words[next_first]["start"]
+            
+            if next_start_time >= curr_end_time:
+                mid = (curr_end_time + next_start_time) / 2.0
+            else:
+                mid = curr_end_time
+            split_points.append(mid)
+        else:
+            last_point = split_points[-1]
+            split_points.append(last_point + 2.0)
+            
+    split_points.append(total_audio_sec)
+    
+    # 3. Slice the master audio without any gaps or discarded audio
+    for idx, row in df.iterrows():
+        sn = str(row["Serial number"])
+        start_time = split_points[idx]
+        end_time = split_points[idx + 1]
+        
+        duration = max(end_time - start_time, 0.5)
+        
+        start_sample = int(start_time * sample_rate)
+        end_sample = min(int(end_time * sample_rate), len(final_audio_array))
+        clip_array = final_audio_array[start_sample:end_sample]
+        
+        audio_path = os.path.join(AUDIO_DIR, f"{sn}.wav")
+        sf.write(audio_path, clip_array, sample_rate)
+        
+        df.at[idx, "audio_length"] = round(duration, 3)
+        print(f"  Row {sn}: [{start_time:.2f}s -> {end_time:.2f}s] ({duration:.2f}s) -> {audio_path}")
             
     df.to_csv(os.path.join(OUTPUT_DIR, "updated_manifest.csv"), index=False)
-    print("--> Phase 2 complete. Manifest updated with exact timestamps.")
+    print("--> Phase 2 complete. Continuous master audio sliced at natural silence midpoints with 100% audio preserved.")
 
 if USE_Z_IMAGE:
     run_phase_1_z_image()
