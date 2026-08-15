@@ -920,7 +920,109 @@ def run_phase_1c_upscale():
         // 3. Patch execution block
         let srcStr = c.source.join("");
         if (srcStr.includes('run_phase_5_final(stitched)') && !srcStr.includes('run_pipeline_for_images')) {
-            const newExec = `if USE_Z_IMAGE:
+            const newExec = `
+def run_phase_2_audio():
+    import os, sys, time, subprocess
+    import numpy as np
+    import soundfile as sf
+    import pandas as pd
+    
+    print("\\n" + "="*60)
+    print("PHASE 2: OmniVoice TTS & Whisper Alignment")
+    print("="*60)
+    
+    serials = [str(r["Serial number"]) for _, r in df.iterrows()]
+    if all_outputs_exist(AUDIO_DIR, serials, ".wav"):
+        print("--> All audio already on disk. Reading durations...")
+        for idx, row in df.iterrows():
+            sn = str(row["Serial number"])
+            ap = os.path.join(AUDIO_DIR, f"{sn}.wav")
+            if os.path.exists(ap):
+                data, sr = sf.read(ap)
+                df.at[idx, "audio_length"] = round(len(data) / sr, 3)
+        df.to_csv(os.path.join(OUTPUT_DIR, "updated_manifest.csv"), index=False)
+        return
+        
+    print("Installing omnivoice and whisper-timestamped...")
+    subprocess.run([sys.executable, "-m", "pip", "install", "-q", "omnivoice", "whisper-timestamped", "openai-whisper"], check=False)
+    
+    full_text = " ".join(df["voice over prompt"].astype(str).tolist())
+    
+    print("Generating audio with OmniVoice...")
+    sample_rate = 24000
+    try:
+        from omnivoice import OmniVoice
+        model = OmniVoice.from_pretrained("k2-fsa/OmniVoice")
+        final_audio_array = model.generate(
+            text=full_text,
+            instruct="male, American accent, deep voice, storytelling, dramatic",
+            num_step=16
+        )
+    except Exception as e:
+        print(f"OmniVoice failed: {e}. Falling back to Kokoro full text generation.")
+        from kokoro import KPipeline
+        tts = KPipeline(lang_code="a")
+        chunks = []
+        for _, _, audio_chunk in tts(full_text, voice=globals().get("KOKORO_VOICE", "am_michael")):
+            if audio_chunk is not None and len(audio_chunk) > 0:
+                chunks.append(audio_chunk)
+        final_audio_array = np.concatenate(chunks).astype(np.float32)
+        
+    if hasattr(final_audio_array, "cpu"):
+        final_audio_array = final_audio_array.cpu().numpy()
+    final_audio_array = np.squeeze(final_audio_array)
+    
+    final_audio_path = os.path.join(OUTPUT_DIR, "final_audio.wav")
+    sf.write(final_audio_path, final_audio_array, sample_rate)
+    
+    print("Aligning with Whisper...")
+    import whisper_timestamped as whisper
+    w_model = whisper.load_model("base", device="cuda" if hasattr(final_audio_array, "cpu") or os.environ.get("CUDA_VISIBLE_DEVICES") else "cpu")
+    w_audio = whisper.load_audio(final_audio_path)
+    result = whisper.transcribe(w_model, w_audio, language="en")
+    
+    words = []
+    for s in result.get("segments", []):
+        for w in s.get("words", []):
+            words.append(w)
+            
+    print(f"Found {len(words)} words in transcription.")
+    
+    word_idx = 0
+    for idx, row in df.iterrows():
+        sn = str(row["Serial number"])
+        sentence = str(row["voice over prompt"])
+        sentence_words = len(sentence.split())
+        
+        if word_idx < len(words):
+            start_time = words[word_idx]["start"]
+            end_idx = min(word_idx + sentence_words - 1, len(words) - 1)
+            end_time = words[end_idx]["end"]
+            
+            duration = end_time - start_time
+            if duration <= 0.1: duration = 1.0
+            
+            start_sample = int(start_time * sample_rate)
+            end_sample = int(end_time * sample_rate)
+            clip_array = final_audio_array[start_sample:end_sample]
+            
+            audio_path = os.path.join(AUDIO_DIR, f"{sn}.wav")
+            sf.write(audio_path, clip_array, sample_rate)
+            
+            df.at[idx, "audio_length"] = round(duration, 3)
+            word_idx = end_idx + 1
+        else:
+            audio_path = os.path.join(AUDIO_DIR, f"{sn}.wav")
+            clip_array = np.zeros((sample_rate * 2,), dtype=np.float32)
+            sf.write(audio_path, clip_array, sample_rate)
+            df.at[idx, "audio_length"] = 2.0
+            
+        print(f"  Saved {sn}.wav ({df.at[idx, 'audio_length']}s)")
+        
+    df.to_csv(os.path.join(OUTPUT_DIR, "updated_manifest.csv"), index=False)
+    print("--> Phase 2 complete.")
+
+if USE_Z_IMAGE:
     run_phase_1_z_image()
 else:
     run_phase_1_flux()
