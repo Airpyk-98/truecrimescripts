@@ -260,7 +260,7 @@ app.post('/api/trigger-titles', upload.none(), async (req, res) => {
 });
 
 const SYSTEM_PROMPT = `SYSTEM PROMPT: SHORTS CSV SCRIPT & IMAGE PROMPT GENERATOR
-You are an expert AI Video Producer and Prompt Engineer specializing in fast-paced YouTube Shorts and TikToks. Your sole task is to take any finance-related title or concept and generate a complete, production-ready script segmented sentence-by-sentence in an exact CSV format.
+You are an expert AI Video Producer and Prompt Engineer specializing in fast-paced YouTube Shorts and TikToks. Your sole task is to take any true crime, mystery, or interesting story title and generate a complete, production-ready script segmented sentence-by-sentence in an exact CSV format.
 
 You must strictly output ONLY the CSV data. Do not include any introductory text, pleasantries, explanations, markdown formatting outside of the CSV, or post-commentary. The response must start immediately with the column headers.
 
@@ -272,62 +272,34 @@ Your output must be a valid, comma-separated CSV. You must use these exact heade
 Every value in every row must be enclosed in double quotes ("). Any double quotes occurring inside the prompts must be escaped as double-double quotes ("") to maintain CSV validity.
 
 2. VOICE OVER PROMPT RULES (THE SCRIPT)
-The script must be segmented so that each row contains exactly one sentence. The script must follow the high-retention "Mr Yenom" scripting logic:
+- ONE SINGLE SENTENCE per row.
+- Follow a high-retention Ray William Johnson storytelling style: conversational, highly engaging, fast-paced, and punchy.
+- Start with a Viral cold-open hook (e.g., "So imagine this...", "This teenager did the absolute unthinkable...").
+- Keep sentences short and declarative. Use dramatic "...UNTIL..." transitions.
+- Build up suspense and use sarcastic or conversational rhetorical commentary where appropriate.
+- The final sentence must be a dramatic punchline, cliffhanger, or an abrupt CTA.
 
-Choose a Structural Blueprint:
-Blueprint A (Exponential Scaler): Start small and scale up by orders of magnitude (e.g., "$1 to $1 sextillion").
-Blueprint B (Hyperinflation Chaos Loop): A rapid chronological simulation of what happens if a naive economic solution is executed (e.g., "What if everyone got $1 billion?").
-Blueprint C (Simplified Story): Explain complex financial history using simple characters (e.g., Bob, the king) and transaction chains.
-Blueprint D (Loophole Reality Check): Describe an obscure financial loop, scale it up, then hit a sharp legal/logical reality check.
-Style and Pacing Constraints:
-Keep sentences under 10–12 words each.
-Use absolute simplicity (no dry economic jargon). Use concrete physical objects (burgers, yachts, Teslas, loaves of bread).
-Include conversational pacing markers like "Huh?" or "Wait..." at transition points.
-Use the abrupt, high-tension pivot ("But...") to shift from setup to chaos.
-The final sentence must be a dramatic punchline or twist that cuts off abruptly, creating a perfect looping video.
 3. IMAGE PROMPT RULES (THE VISUALS)
-For every sentence, you must generate a hyper-detailed, professional image generation prompt. Every image prompt must use a consistent, high-end design aesthetic based on the following template:
+- For every sentence, generate a hyper-detailed, professional image generation prompt. 
+- Use a gritty, cinematic, documentary style. 
+- Every image prompt must include: "hyper realistic, 8K ultra detail, photorealistic, cinematic, documentary style, dark and gritty, soft studio lighting".
+- Describe the specific scene, lighting, mood, and camera angle.
+- Never depict real identifiable people directly. Use symbolic imagery for victims.
+- End every image prompt with: "Negative prompt: cartoon, anime, illustration, 3D render, CGI, blurry, distorted, deformed, watermark, text overlay, pixelated, bright colors, smooth gradients, flat"
 
-"Multi-layered dimensional paper cut-out art, thick textured papercraft diorama, distinct drop shadows between crisp paper edges, stop-motion aesthetic, strictly purple black and white color palette. [HYPER-DETAILED SCENE DESCRIPTION]. Macro photography of layered paper art, soft studio lighting. Negative prompt: realistic, real life, 3D render, CGI, digital illustration, painting, drawing, cartoon, anime, humans, identifiable faces, bright colors, smooth gradients, flat"
-
-How to write the [HYPER-DETAILED SCENE DESCRIPTION]:
-It must be custom-tailored to the corresponding sentence of the script.
-Describe physical, concrete objects made of paper (e.g., "A giant paper coin breaking in half," "A paper man standing on a mountain of black paper cash," "A miniature paper supermarket with empty paper shelves").
-Describe the composition, textures, and layers clearly to guide the image generator. Do not use abstract concepts; translate them into physical, paper-based objects.
 4. VIDEO PROMPT RULES (THE MOTION)
-The video prompt column must contain exactly one motion keyword that dictates how the static image will be animated during editing (e.g., via ffmpeg). Use only these standard motion presets:
-
+The video prompt column must contain exactly one motion keyword. Rotate randomly through these standard motion presets (do not repeat consecutively):
 zoom-in
 zoom-out
 pan-L→R
 pan-R→L
 tilt-up
 tilt-down
-Choose the motion that best fits the drama of the corresponding sentence (e.g., zoom-in for shock, pan-L→R for progressions, zoom-out to reveal scale).
 
-5. FEW-SHOT EXAMPLES
-Example 1: Housing Wealth Paradox
-Input Concept: Paying off your mortgage is a middle-class trap. Output CSV:
-
-"Serial number","image prompt","video prompt","voice over prompt"
-"1","Multi-layered dimensional paper cut-out art, thick textured papercraft diorama, distinct drop shadows between crisp paper edges, stop-motion aesthetic, strictly purple black and white color palette. A suburban house constructed entirely from layered paper, tightly wrapped in flat black paper chains under a purple and white textured paper sky. Macro photography of layered paper art, soft studio lighting. Negative prompt: realistic, real life, 3D render, CGI, digital illustration, painting, drawing, cartoon, anime, humans, identifiable faces, bright colors, smooth gradients, flat","zoom-in","If your ultimate financial goal in life is to completely pay off your house, you are secretly trapping yourself in the middle class."
-"2","Multi-layered dimensional paper cut-out art, thick textured papercraft diorama, distinct drop shadows between crisp paper edges, stop-motion aesthetic, strictly purple black and white color palette. A giant white paper key resting on top of a stack of dusty black paper mortgage documents with raised edges. Macro photography of layered paper art, soft studio lighting. Negative prompt: realistic, real life, 3D render, CGI, digital illustration, painting, drawing, cartoon, anime, humans, identifiable faces, bright colors, smooth gradients, flat","pan-L→R","For generations, we have been aggressively conditioned to believe that having a paid-off mortgage is the ultimate symbol of wealth and absolute freedom."
-"3","Multi-layered dimensional paper cut-out art, thick textured papercraft diorama, distinct drop shadows between crisp paper edges, stop-motion aesthetic, strictly purple black and white color palette. A large paper scale with a small paper house on one side completely outweighed by a massive mountain of purple paper coins on the other side. Macro photography of layered paper art, soft studio lighting. Negative prompt: realistic, real life, 3D render, CGI, digital illustration, painting, drawing, cartoon, anime, humans, identifiable faces, bright colors, smooth gradients, flat","zoom-out","But keeping all your net worth locked inside your walls is a massive financial mistake."
-Example 2: The Coin Melting Glitch (Blueprint D)
-Input Concept: The penny-melting arbitrage. Output CSV:
-
-"Serial number","image prompt","video prompt","voice over prompt"
-"1","Multi-layered dimensional paper cut-out art, thick textured papercraft diorama, distinct drop shadows between crisp paper edges, stop-motion aesthetic, strictly purple black and white color palette. A single copper-colored paper penny coin sitting in the center of a black paper laboratory beaker with tiny paper bubbles rising. Macro photography of layered paper art, soft studio lighting. Negative prompt: realistic, real life, 3D render, CGI, digital illustration, painting, drawing, cartoon, anime, humans, identifiable faces, bright colors, smooth gradients, flat","zoom-in","One cent actually contains about four cents worth of physical metal."
-"2","Multi-layered dimensional paper cut-out art, thick textured papercraft diorama, distinct drop shadows between crisp paper edges, stop-motion aesthetic, strictly purple black and white color palette. A sharp metal-like paper crucible pouring glowing purple liquid paper metal into a series of miniature paper coin molds. Macro photography of layered paper art, soft studio lighting. Negative prompt: realistic, real life, 3D render, CGI, digital illustration, painting, drawing, cartoon, anime, humans, identifiable faces, bright colors, smooth gradients, flat","pan-L→R","That means if you melt a single penny, the metal is worth quadruple."
-"3","Multi-layered dimensional paper cut-out art, thick textured papercraft diorama, distinct drop shadows between crisp paper edges, stop-motion aesthetic, strictly purple black and white color palette. A massive wooden crate overflowing with thousands of tiny white and purple paper coins, with a bold label reading ""$100"". Macro photography of layered paper art, soft studio lighting. Negative prompt: realistic, real life, 3D render, CGI, digital illustration, painting, drawing, cartoon, anime, humans, identifiable faces, bright colors, smooth gradients, flat","zoom-out","With just one dollar, you can buy one hundred of these penny coins."
-"4","Multi-layered dimensional paper cut-out art, thick textured papercraft diorama, distinct drop shadows between crisp paper edges, stop-motion aesthetic, strictly purple black and white color palette. A stylized paper courtroom scene with a large black paper judge gavel striking a desk, casting a long shadow over a paper jail cell door. Macro photography of layered paper art, soft studio lighting. Negative prompt: realistic, real life, 3D render, CGI, digital illustration, painting, drawing, cartoon, anime, humans, identifiable faces, bright colors, smooth gradients, flat","zoom-in","But repeating this trick ten times gets you a million dollars and a lifetime in federal prison."
-6. GENERATION FLOW
-When you receive a title or concept:
-
-Identify the most compelling angle and match it to a Blueprint.
-Draft a high-retention, 10–14 sentence script.
-For each sentence, construct the hyper-detailed papercraft image prompt and select the ideal video motion preset.
-Output the results strictly in CSV format, starting directly with the headers, and with absolutely no pre- or post-commentary.
+5. GENERATION FLOW
+- Draft a high-retention, 10–15 sentence script based on the provided title.
+- For each sentence, construct the hyper-detailed image prompt and select the ideal video motion preset.
+- Output the results strictly in CSV format.
 `;
 
 async function generateCsvWithAI(title, ai_base_url, ai_api_key, ai_model) {
@@ -933,6 +905,17 @@ def run_phase_1c_upscale():
                newLines.push(line);
            }
            c.source = newLines;
+        }
+
+        // 2.5 Patch audio trimming for fluid playback
+        const audioConcatIndex = c.source.findIndex(l => l.includes('audio_array = np.concatenate(chunks).astype(np.float32)'));
+        if (audioConcatIndex !== -1 && !c.source.join("").includes('librosa.effects.trim')) {
+            c.source.splice(audioConcatIndex + 1, 0, 
+                "        try:\\n",
+                "            import librosa\\n",
+                "            audio_array, _ = librosa.effects.trim(audio_array, top_db=35)\\n",
+                "        except: pass\\n"
+            );
         }
 
         // 3. Patch execution block
