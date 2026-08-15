@@ -620,22 +620,22 @@ document.addEventListener('DOMContentLoaded', () => {
   resumeActiveJob();
 
   // ═══════════════════════════════════════════════════════════
-  // 10. OUTPUT VIDEO DISPLAY
+  // 10. OUTPUT VIDEO DISPLAY (Grid Cards & Dedicated Download Buttons)
   // ═══════════════════════════════════════════════════════════
   const showOutputVideo = (outputs, aspectRatio) => {
     const isVertical = aspectRatio === '9:16';
     videoPreviewContainer.className = 'video-preview-wrapper' + (isVertical ? ' vertical' : '');
-    videoPreviewContainer.style.flexDirection = 'row';
-    videoPreviewContainer.style.flexWrap = 'wrap';
-    videoPreviewContainer.style.gap = '16px';
-    videoPreviewContainer.style.justifyContent = 'center';
+    videoPreviewContainer.style.display = 'grid';
+    videoPreviewContainer.style.gridTemplateColumns = 'repeat(auto-fit, minmax(280px, 1fr))';
+    videoPreviewContainer.style.gap = '20px';
+    videoPreviewContainer.style.width = '100%';
+    videoPreviewContainer.style.marginTop = '12px';
 
     videoPreviewContainer.innerHTML = '';
     const downloadBtnsContainer = document.querySelector('.output-actions');
     downloadBtnsContainer.innerHTML = '';
 
     const backendUrl = backendUrlInput ? backendUrlInput.value.trim().replace(/\/$/, '') : '';
-
     const flatUrls = [];
 
     outputs.forEach((item, idx) => {
@@ -643,31 +643,54 @@ document.addEventListener('DOMContentLoaded', () => {
       const title = isObject ? item.title : ('Video ' + (idx + 1));
       const urls = isObject ? item.urls : [item];
       
-      urls.forEach((url, sIdx) => {
+      const card = document.createElement('div');
+      card.className = 'rendered-video-card';
+      card.style.background = 'rgba(255, 255, 255, 0.03)';
+      card.style.border = '1px solid rgba(255, 255, 255, 0.08)';
+      card.style.borderRadius = '12px';
+      card.style.padding = '14px';
+      card.style.display = 'flex';
+      card.style.flexDirection = 'column';
+      card.style.gap = '10px';
+
+      const titleEl = document.createElement('div');
+      titleEl.style.display = 'flex';
+      titleEl.style.justifyContent = 'space-between';
+      titleEl.style.alignItems = 'flex-start';
+      titleEl.style.gap = '8px';
+      titleEl.innerHTML = `
+        <strong style="color: var(--text-primary); font-size: 13px; line-height: 1.4; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;">${title}</strong>
+        <span style="font-size: 11px; background: rgba(99, 102, 241, 0.15); color: #818cf8; padding: 2px 6px; border-radius: 4px; white-space: nowrap;">${aspectRatio}</span>
+      `;
+      card.appendChild(titleEl);
+
+      urls.forEach((url) => {
         const fullVideoUrl = backendUrl ? `${backendUrl}${url}` : (window.location.origin + url);
         flatUrls.push(fullVideoUrl);
         const isUpscaled = url.includes('upscaled');
-        const label = isObject ? `${title} ${isUpscaled ? '(Upscaled)' : ''}` : (isUpscaled ? 'Upscaled Video' : 'Normal Video');
 
-        const vidWrapper = document.createElement('div');
-        vidWrapper.style.display = 'flex';
-        vidWrapper.style.flexDirection = 'column';
-        vidWrapper.style.alignItems = 'center';
-        vidWrapper.style.gap = '8px';
-        
-        vidWrapper.innerHTML = `
-          <h4 style="color: var(--text-muted); font-size: 14px; margin: 0; text-align: center; max-width: 250px;">${label}</h4>
-          <video controls style="max-height: 400px; border-radius: 8px;">
-            <source src="${fullVideoUrl}" type="video/mp4">Your browser does not support the video tag.
-          </video>
-        `;
-        videoPreviewContainer.appendChild(vidWrapper);
+        const videoEl = document.createElement('video');
+        videoEl.controls = true;
+        videoEl.style.width = '100%';
+        videoEl.style.maxHeight = '360px';
+        videoEl.style.borderRadius = '8px';
+        videoEl.style.background = '#000';
+        videoEl.innerHTML = `<source src="${fullVideoUrl}" type="video/mp4">Your browser does not support the video tag.`;
+        card.appendChild(videoEl);
+
+        const btnGroup = document.createElement('div');
+        btnGroup.style.display = 'flex';
+        btnGroup.style.gap = '8px';
+        btnGroup.style.width = '100%';
 
         const dBtn = document.createElement('a');
         dBtn.href = fullVideoUrl;
-        dBtn.className = 'btn primary-btn download-btn';
-        dBtn.style.marginBottom = '8px';
-        dBtn.innerHTML = `<span>Download ${isObject ? 'MP4' : label}</span>`;
+        dBtn.className = 'btn primary-btn';
+        dBtn.style.flex = '1';
+        dBtn.style.textAlign = 'center';
+        dBtn.style.fontSize = '12px';
+        dBtn.style.padding = '8px 10px';
+        dBtn.innerHTML = `<span>⬇ Download ${isUpscaled ? 'Upscaled' : 'MP4'}</span>`;
         
         dBtn.onclick = (e) => {
           e.preventDefault();
@@ -682,38 +705,50 @@ document.addEventListener('DOMContentLoaded', () => {
             .then(blob => {
               const a = document.createElement('a');
               a.href = URL.createObjectURL(blob);
-              let sanitized = title.replace(/[^a-zA-Z0-9_]/g, '_').substring(0, 30);
-              a.download = isObject ? `${sanitized}${isUpscaled ? '_upscaled' : ''}.mp4` : `final_video_${isUpscaled ? 'upscaled_' : ''}${aspectRatio.replace(':', '_')}.mp4`;
+              let sanitized = title.replace(/[^a-zA-Z0-9_]/g, '_').substring(0, 35);
+              a.download = `${sanitized}${isUpscaled ? '_upscaled' : ''}.mp4`;
               a.click();
               URL.revokeObjectURL(a.href);
             })
             .catch(() => window.open(fullVideoUrl, '_blank'))
             .finally(() => { btnSpan.textContent = orig; dBtn.style.pointerEvents = 'auto'; dBtn.style.opacity = '1'; });
         };
-        
-        downloadBtnsContainer.appendChild(dBtn);
+        btnGroup.appendChild(dBtn);
+
+        const vBtn = document.createElement('a');
+        vBtn.href = fullVideoUrl;
+        vBtn.target = '_blank';
+        vBtn.className = 'btn secondary-btn';
+        vBtn.style.fontSize = '12px';
+        vBtn.style.padding = '8px 10px';
+        vBtn.textContent = 'Open ↗';
+        btnGroup.appendChild(vBtn);
+
+        card.appendChild(btnGroup);
       });
+
+      videoPreviewContainer.appendChild(card);
     });
 
-    const cBtn = document.createElement('button');
-    cBtn.className = 'btn secondary-btn copy-btn';
-    cBtn.innerHTML = `<span class="copy-icon">🔗</span><span id="copy-btn-text">Copy Links</span>`;
-    cBtn.onclick = () => {
-      navigator.clipboard.writeText(flatUrls.join('\n')).then(() => {
-        linkCopiedMsg.style.display = 'block';
-        cBtn.querySelector('#copy-btn-text').textContent = 'Copied!';
-        setTimeout(() => { linkCopiedMsg.style.display = 'none'; cBtn.querySelector('#copy-btn-text').textContent = 'Copy Links'; }, 3000);
-      }).catch(() => alert('Failed to copy link.'));
-    };
-    downloadBtnsContainer.appendChild(cBtn);
+    if (flatUrls.length > 0) {
+      const cBtn = document.createElement('button');
+      cBtn.className = 'btn secondary-btn copy-btn';
+      cBtn.innerHTML = `<span class="copy-icon">🔗</span><span id="copy-btn-text">Copy All Video Links (${flatUrls.length})</span>`;
+      cBtn.onclick = () => {
+        navigator.clipboard.writeText(flatUrls.join('\n')).then(() => {
+          linkCopiedMsg.style.display = 'block';
+          cBtn.querySelector('#copy-btn-text').textContent = 'Copied All!';
+          setTimeout(() => { linkCopiedMsg.style.display = 'none'; cBtn.querySelector('#copy-btn-text').textContent = `Copy All Video Links (${flatUrls.length})`; }, 3000);
+        }).catch(() => alert('Failed to copy links.'));
+      };
+      downloadBtnsContainer.appendChild(cBtn);
+    }
 
     outputCard.style.display = 'block';
-    // Only scroll to it if not currently polling
-    // Actually, maybe don't auto scroll since it gets updated incrementally
   };
 
   // ═══════════════════════════════════════════════════════════
-  // 11. RENDER HISTORY (persists in localStorage)
+  // 11. RENDER HISTORY (persists per video item)
   // ═══════════════════════════════════════════════════════════
   const loadHistory = () => {
     let history = [];
@@ -732,7 +767,7 @@ document.addEventListener('DOMContentLoaded', () => {
         <div class="history-empty">
           <span class="history-empty-icon">📭</span>
           <p>No completed renders yet.</p>
-          <p class="helper-small">Completed and failed jobs will appear here with download links.</p>
+          <p class="helper-small">Completed videos will appear here with title and download links.</p>
         </div>`;
       return;
     }
@@ -748,8 +783,8 @@ document.addEventListener('DOMContentLoaded', () => {
       const itemOutputs = item.urls || (item.url ? [item.url] : []);
       itemOutputs.forEach(out => {
          if (typeof out === 'object' && out !== null) {
-            flatItemUrls = flatItemUrls.concat(out.urls);
-         } else {
+            flatItemUrls = flatItemUrls.concat(out.urls || []);
+         } else if (typeof out === 'string') {
             flatItemUrls.push(out);
          }
       });
@@ -757,23 +792,24 @@ document.addEventListener('DOMContentLoaded', () => {
 
       const statusClass = item.status === 'success' ? 'success' : 'failed';
       const statusLabel = item.status === 'success' ? '✓ Success' : '✗ Failed';
+      const titleDisplay = item.title || `Job: ${item.jobId || 'Unknown'}`;
 
       let actionsHtml = '';
       if (fullUrls.length > 0) {
         actionsHtml = `
-          <div class="hist-actions">
-            ${fullUrls.map((fu, idx) => `<a href="${fu}" target="_blank" class="btn secondary-btn" style="margin-right: 4px;">View ${fullUrls.length > 1 ? (fu.includes('upscaled') ? 'Upscaled' : 'Normal') : ''}</a>`).join('')}
-            <button class="btn secondary-btn hist-copy-btn" data-url="${fullUrls.join('\n')}">Copy</button>
+          <div class="hist-actions" style="display: flex; gap: 6px; align-items: center;">
+            ${fullUrls.map((fu) => `<a href="${fu}" target="_blank" class="btn secondary-btn" style="padding: 4px 10px; font-size: 12px;">View ${fu.includes('upscaled') ? 'Upscaled' : 'Video'}</a>`).join('')}
+            <button class="btn secondary-btn hist-copy-btn" data-url="${fullUrls.join('\n')}" style="padding: 4px 8px; font-size: 12px;">Copy</button>
           </div>`;
       }
 
       div.innerHTML = `
-        <div class="hist-info">
-          <strong>${new Date(item.timestamp).toLocaleString()}</strong>
-          <div class="hist-meta">
+        <div class="hist-info" style="flex: 1; min-width: 200px;">
+          <strong style="font-size: 14px; margin-bottom: 4px; display: block; color: var(--text-primary);">${titleDisplay}</strong>
+          <div class="hist-meta" style="display: flex; gap: 8px; font-size: 12px; color: var(--text-muted);">
             <span class="hist-status ${statusClass}">${statusLabel}</span>
-            <span>Job: ${item.jobId}</span>
-            ${item.ratio ? `<span>Ratio: ${item.ratio}</span>` : ''}
+            <span>${new Date(item.timestamp).toLocaleString([], {month: 'numeric', day: 'numeric', hour: '2-digit', minute:'2-digit'})}</span>
+            ${item.ratio ? `<span>${item.ratio}</span>` : ''}
           </div>
         </div>
         ${actionsHtml}`;
@@ -793,18 +829,35 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   };
 
-  const saveToHistory = (urls, ratio, jobId, status) => {
+  const saveToHistory = (outputs, ratio, jobId, status) => {
     let history = [];
     try { history = JSON.parse(localStorage.getItem('render_history') || '[]'); } catch (e) {}
 
-    history.push({
-      urls: urls,
-      ratio: ratio,
-      jobId: jobId,
-      status: status,
-      timestamp: Date.now()
-    });
+    if (Array.isArray(outputs) && outputs.length > 0 && typeof outputs[0] === 'object') {
+      outputs.forEach(item => {
+        history.push({
+          id: Date.now().toString() + '_' + Math.random().toString(36).substr(2, 5),
+          timestamp: Date.now(),
+          title: item.title,
+          urls: item.urls,
+          ratio: ratio,
+          jobId: jobId,
+          status: status
+        });
+      });
+    } else if (Array.isArray(outputs) && outputs.length > 0) {
+      history.push({
+        id: Date.now().toString(),
+        timestamp: Date.now(),
+        urls: outputs,
+        ratio: ratio,
+        jobId: jobId,
+        status: status
+      });
+    }
 
+    // Keep last 40 items
+    if (history.length > 40) history = history.slice(-40);
     localStorage.setItem('render_history', JSON.stringify(history));
     loadHistory();
   };

@@ -284,10 +284,10 @@ Every value in every row must be enclosed in double quotes ("). Any double quote
 
 3. IMAGE PROMPT RULES (THE VISUALS)
 - For every sentence, generate a hyper-detailed, professional image generation prompt. 
-- Use the following exact aesthetic: "Dimensional paper cut-out art, thick textured papercraft diorama, distinct drop shadows between crisp paper edges, stop-motion aesthetic, strictly purple black and white color palette."
-- Describe physical, concrete objects made of paper (e.g., "A paper man standing on a mountain of black paper cash," "A miniature paper supermarket with empty paper shelves").
-- Never depict real identifiable people directly. Use symbolic imagery for victims.
-- End every image prompt with: "Negative prompt: realistic, real life, 3D render, CGI, digital illustration, painting, drawing, cartoon, anime, humans, identifiable faces, bright colors, smooth gradients, flat, multi-layered"
+- Use the following exact aesthetic: "Dimensional paper cut-out art, textured craft paper diorama, distinct drop shadows between crisp paper edges, tactile stop-motion aesthetic, cinematic studio lighting, rich colors."
+- Describe physical, concrete objects made of paper (e.g., "A crafted paper man standing in front of a green paper bank with miniature paper dollar bills", "A miniature paper city street with paper cars and paper buildings under a night sky").
+- Never depict real identifiable people directly. Use symbolic papercraft figures.
+- End every image prompt with: "Negative prompt: realistic photography, 3D CGI render, digital drawing, smooth flat vector, blurry, distorted, multi-layered"
 
 4. VIDEO PROMPT RULES (THE MOTION)
 The video prompt column must contain exactly one motion keyword. Rotate randomly through these standard motion presets (do not repeat consecutively):
@@ -372,22 +372,38 @@ async function processBatchInBackground(jobId, titles, config, finalUsername, fi
     try {
       const outputUrls = await runKagglePipelineSync(job, title, csvBase64, config, finalUsername, finalKey);
       if (outputUrls && outputUrls.length > 0) {
-        // Send webhook instantly
+        // Send webhook instantly to n8n
         const absoluteUrls = outputUrls.map(url => `https://epic98-truecrime-video-generator.hf.space${url}`);
         const webhookPayload = {
           title: title,
+          download_url: absoluteUrls[0],
           download_urls: absoluteUrls
         };
+        
+        // 1. Send GET request (which n8n webhook /drivon-yt is specifically registered for)
+        try {
+          const queryParams = new URLSearchParams({
+            title: title,
+            download_url: absoluteUrls[0],
+            download_urls: JSON.stringify(absoluteUrls)
+          }).toString();
+          
+          await fetch(`https://airpyk98-youtube-n8n.hf.space/webhook/drivon-yt?${queryParams}`, {
+            method: 'GET'
+          });
+          job.log.push(`[SUCCESS] Webhook dispatched to n8n for: ${title}`);
+        } catch (we) {
+          job.log.push(`[WARN] Webhook GET request error for ${title}: ${we.message}`);
+        }
+
+        // 2. Also send POST request as backup
         try {
           await fetch("https://airpyk98-youtube-n8n.hf.space/webhook/drivon-yt", {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(webhookPayload)
           });
-          job.log.push(`[SUCCESS] Webhook sent for ${title}`);
-        } catch (we) {
-          job.log.push(`[WARN] Failed to send webhook for ${title}: ${we.message}`);
-        }
+        } catch (we) {}
 
         job.completedVideos.push({
           title: title,
@@ -953,10 +969,19 @@ async function runKagglePipelineSync(job, title, csvBase64, config, finalUsernam
   let videoFiles = [];
   const outputsFolder = path.join(downloadDir, 'automated_channel_outputs');
   if (fs.existsSync(outputsFolder)) {
-    videoFiles = fs.readdirSync(outputsFolder).filter(f => f.endsWith('.mp4')).map(f => path.join(outputsFolder, f));
+    const allMp4s = fs.readdirSync(outputsFolder).filter(f => f.endsWith('.mp4'));
+    const finalMp4s = allMp4s.filter(f => f.startsWith('FINAL_AUTOMATED_OUTPUT_'));
+    if (finalMp4s.length > 0) {
+      videoFiles = finalMp4s.map(f => path.join(outputsFolder, f));
+    } else {
+      videoFiles = allMp4s.filter(f => !f.includes('_clip') && !f.includes('effect') && !f.startsWith('temp_')).map(f => path.join(outputsFolder, f));
+    }
   }
   if (videoFiles.length === 0) {
-    videoFiles = findAllMp4s(downloadDir);
+    videoFiles = findAllMp4s(downloadDir).filter(f => {
+      const b = path.basename(f);
+      return !b.includes('_clip') && !b.includes('effect') && !b.startsWith('temp_');
+    });
   }
 
   if (videoFiles.length === 0) {
@@ -964,16 +989,11 @@ async function runKagglePipelineSync(job, title, csvBase64, config, finalUsernam
   }
 
   const urls = [];
-  videoFiles.forEach((vFile, idx) => {
+  videoFiles.forEach((vFile) => {
     const isUpscaled = vFile.includes('upscaled');
-    // Sanitize title for file name to avoid injection
-    const destFilename = `${safeTitle}_${isUpscaled ? 'upscaled' : 'normal'}_${idx}.mp4`;
+    const destFilename = `${safeTitle}_${isUpscaled ? 'upscaled' : 'normal'}.mp4`;
     const destPath = path.join(OUTPUTS_DIR, destFilename);
     fs.copyFileSync(vFile, destPath);
-    // Determine base URL dynamically based on current environment or standard paths
-    // Since backend isn't aware of its public HF url easily, we just store relative paths 
-    // and frontend forms full URL. But webhook needs absolute URL. Let's pass the host in config later or use relative and let frontend handle?
-    // Wait, webhook is fired from backend.
     urls.push(`/outputs/${destFilename}`); 
   });
   
