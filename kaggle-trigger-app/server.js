@@ -373,7 +373,7 @@ async function processBatchInBackground(jobId, titles, config, finalUsername, fi
       const outputUrls = await runKagglePipelineSync(job, title, csvBase64, config, finalUsername, finalKey);
       if (outputUrls && outputUrls.length > 0) {
         // Send webhook instantly to n8n
-        const absoluteUrls = outputUrls.map(url => `https://epic98-truecrime-video-generator.hf.space${url}`);
+        const absoluteUrls = outputUrls.map(url => url.startsWith('http') ? url : `https://epic98-truecrime-video-generator.hf.space${url}`);
         const webhookPayload = {
           title: title,
           download_url: absoluteUrls[0],
@@ -989,13 +989,37 @@ async function runKagglePipelineSync(job, title, csvBase64, config, finalUsernam
   }
 
   const urls = [];
-  videoFiles.forEach((vFile) => {
+  for (const vFile of videoFiles) {
     const isUpscaled = vFile.includes('upscaled');
     const destFilename = `${safeTitle}_${isUpscaled ? 'upscaled' : 'normal'}.mp4`;
     const destPath = path.join(OUTPUTS_DIR, destFilename);
     fs.copyFileSync(vFile, destPath);
-    urls.push(`/outputs/${destFilename}`); 
-  });
+    
+    // Attempt HF Dataset Upload
+    try {
+      const hfToken = config.hf_token_override || process.env.HF_TOKEN || '';
+      const repoId = "epic98/truecrime-videos"; // Target Dataset Repository
+      const uploadCmd = `python upload_to_dataset.py "${destPath}" "${repoId}" "${hfToken}"`;
+      job.log.push(`[INFO] Uploading ${destFilename} to HF Dataset ${repoId}...`);
+      const upRes = await runCmd(uploadCmd, env);
+      if (upRes.success) {
+        const match = upRes.stdout.match(/URL:\s*(http.*)/);
+        if (match) {
+           urls.push(match[1]);
+           job.log.push(`[SUCCESS] Uploaded to dataset: ${match[1]}`);
+        } else {
+           job.log.push(`[WARN] Upload completed but no URL found. Fallback to local.`);
+           urls.push(`/outputs/${destFilename}`);
+        }
+      } else {
+        job.log.push(`[WARN] HF Dataset upload failed: ${upRes.error}. Fallback to local.`);
+        urls.push(`/outputs/${destFilename}`);
+      }
+    } catch (e) {
+      job.log.push(`[ERROR] HF Dataset upload error: ${e.message}. Fallback to local.`);
+      urls.push(`/outputs/${destFilename}`);
+    }
+  }
   
   // Cleanup temp
   fs.rmSync(tempDir, { recursive: true, force: true });
