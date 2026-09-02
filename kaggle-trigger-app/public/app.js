@@ -510,9 +510,16 @@ document.addEventListener('DOMContentLoaded', () => {
               const currentTitle = data.titlesDone + 1;
               const displayTitle = currentTitle <= data.titlesTotal ? currentTitle : data.titlesTotal;
               
-              // Incrementally show completed videos
+              // Incrementally show completed videos and save to history immediately
               if (data.completedVideos && data.completedVideos.length > 0) {
                  showOutputVideo(data.completedVideos, data.aspectRatio);
+                 let savedCount = parseInt(localStorage.getItem('active_job_completed_count') || '0');
+                 if (data.completedVideos.length > savedCount) {
+                     const newVideos = data.completedVideos.slice(savedCount);
+                     saveToHistory(newVideos, data.aspectRatio, jobId, 'success');
+                     loadHistory();
+                     localStorage.setItem('active_job_completed_count', data.completedVideos.length.toString());
+                 }
               }
               
               let pct = Math.floor((data.titlesDone / data.titlesTotal) * 100);
@@ -539,7 +546,18 @@ document.addEventListener('DOMContentLoaded', () => {
             const urls = data.videoUrls || (data.videoUrl ? [data.videoUrl] : []);
             const finalOutputs = (data.completedVideos && data.completedVideos.length > 0) ? data.completedVideos : urls;
             showOutputVideo(finalOutputs, data.aspectRatio);
-            saveToHistory(finalOutputs, data.aspectRatio, jobId, 'success');
+            
+            // Check if there are any remaining unsaved outputs
+            let savedCount = parseInt(localStorage.getItem('active_job_completed_count') || '0');
+            if (data.completedVideos && data.completedVideos.length > savedCount) {
+                const newVideos = data.completedVideos.slice(savedCount);
+                saveToHistory(newVideos, data.aspectRatio, jobId, 'success');
+                loadHistory();
+            } else if (!data.completedVideos || data.completedVideos.length === 0) {
+                saveToHistory(finalOutputs, data.aspectRatio, jobId, 'success');
+                loadHistory();
+            }
+            
             clearActiveJob();
           } else if (data.status === 'error') {
             updateStatusIndicator('error');
@@ -548,7 +566,17 @@ document.addEventListener('DOMContentLoaded', () => {
             pollingInterval = null;
             setPipelineRunning(false);
             addLogLine('[ERROR] The background Kaggle execution failed.', 'error');
-            saveToHistory(null, null, jobId, 'failed');
+            
+            // Save remaining unsaved completed videos if any, else log the whole job as failed
+            let savedCount = parseInt(localStorage.getItem('active_job_completed_count') || '0');
+            if (data.completedVideos && data.completedVideos.length > savedCount) {
+                const newVideos = data.completedVideos.slice(savedCount);
+                saveToHistory(newVideos, data.aspectRatio, jobId, 'success');
+                loadHistory();
+            } else if (savedCount === 0) {
+                saveToHistory(null, null, jobId, 'failed');
+            }
+            
             clearActiveJob();
           }
         })
@@ -574,6 +602,7 @@ document.addEventListener('DOMContentLoaded', () => {
     localStorage.removeItem('active_job_logs');
     localStorage.removeItem('active_job_status');
     localStorage.removeItem('active_job_progress');
+    localStorage.removeItem('active_job_completed_count');
   };
 
   // ═══════════════════════════════════════════════════════════
@@ -665,18 +694,9 @@ document.addEventListener('DOMContentLoaded', () => {
       card.appendChild(titleEl);
 
       urls.forEach((url) => {
-        const fullVideoUrl = backendUrl ? `${backendUrl}${url}` : (window.location.origin + url);
+        const fullVideoUrl = url.startsWith('http') ? url : (backendUrl ? `${backendUrl}${url}` : (window.location.origin + url));
         flatUrls.push(fullVideoUrl);
         const isUpscaled = url.includes('upscaled');
-
-        const videoEl = document.createElement('video');
-        videoEl.controls = true;
-        videoEl.style.width = '100%';
-        videoEl.style.maxHeight = '360px';
-        videoEl.style.borderRadius = '8px';
-        videoEl.style.background = '#000';
-        videoEl.innerHTML = `<source src="${fullVideoUrl}" type="video/mp4">Your browser does not support the video tag.`;
-        card.appendChild(videoEl);
 
         const btnGroup = document.createElement('div');
         btnGroup.style.display = 'flex';
@@ -721,7 +741,7 @@ document.addEventListener('DOMContentLoaded', () => {
         vBtn.className = 'btn secondary-btn';
         vBtn.style.fontSize = '12px';
         vBtn.style.padding = '8px 10px';
-        vBtn.textContent = 'Open ↗';
+        vBtn.textContent = 'Web Preview ↗';
         btnGroup.appendChild(vBtn);
 
         card.appendChild(btnGroup);
@@ -788,7 +808,7 @@ document.addEventListener('DOMContentLoaded', () => {
             flatItemUrls.push(out);
          }
       });
-      const fullUrls = flatItemUrls.map(u => backendUrl ? `${backendUrl}${u}` : (window.location.origin + u));
+      const fullUrls = flatItemUrls.map(u => u.startsWith('http') ? u : (backendUrl ? `${backendUrl}${u}` : (window.location.origin + u)));
 
       const statusClass = item.status === 'success' ? 'success' : 'failed';
       const statusLabel = item.status === 'success' ? '✓ Success' : '✗ Failed';
@@ -798,7 +818,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (fullUrls.length > 0) {
         actionsHtml = `
           <div class="hist-actions" style="display: flex; gap: 6px; align-items: center;">
-            ${fullUrls.map((fu) => `<a href="${fu}" target="_blank" class="btn secondary-btn" style="padding: 4px 10px; font-size: 12px;">View ${fu.includes('upscaled') ? 'Upscaled' : 'Video'}</a>`).join('')}
+            ${fullUrls.map((fu) => `<a href="${fu}" target="_blank" class="btn secondary-btn" style="padding: 4px 10px; font-size: 12px;">Web Preview ↗</a>`).join('')}
             <button class="btn secondary-btn hist-copy-btn" data-url="${fullUrls.join('\n')}" style="padding: 4px 8px; font-size: 12px;">Copy</button>
           </div>`;
       }

@@ -100,10 +100,19 @@ body {
   padding: 6px;
   margin-bottom: 28px;
   box-shadow: 0 4px 24px rgba(0,0,0,0.3);
+  overflow-x: auto;
+  white-space: nowrap;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none; /* Firefox */
+}
+
+.tab-bar::-webkit-scrollbar {
+  display: none; /* Chrome/Safari */
 }
 
 .tab-btn {
   flex: 1;
+  flex-shrink: 0; /* Prevent shrinking on small screens */
   display: flex;
   align-items: center;
   justify-content: center;
