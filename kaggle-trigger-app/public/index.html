@@ -149,6 +149,24 @@
           </div>
         </div>
 
+        <!-- YouTube Authentication -->
+        <div class="card glass-card">
+          <div class="card-header">
+            <span class="badge-icon">▶️</span>
+            <h2>YouTube Authentication</h2>
+          </div>
+          <div class="card-body">
+            <p class="helper-small">Connect your YouTube account to enable automatic and bulk uploading of generated videos directly to your channel.</p>
+            <div class="auth-buttons" style="margin-top: 15px;">
+              <button class="btn secondary-btn" id="connect-youtube-btn">
+                <span>🔗</span> Connect YouTube Account
+              </button>
+            </div>
+            <div class="success-message" id="youtube-connected-msg" style="display: none;">✓ Connected to YouTube!</div>
+            <div class="status-message" id="youtube-error-msg" style="display: none; color: #f87171;"></div>
+          </div>
+        </div>
+
       </div>
     </section>
 
@@ -395,6 +413,6 @@
     <p>Powered by Hugging Face Docker Spaces & Kaggle API • Designed for high-speed storytelling channels</p>
   </footer>
 
-  <script src="app.js"></script>
+  <script type="module" src="app.js"></script>
 </body>
 </html>
