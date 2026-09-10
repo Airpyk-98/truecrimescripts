@@ -1367,6 +1367,40 @@ function cleanupJobTemp(jobId) {
   }, 10000); // 10s grace period
 }
 
+// ==========================================
+// YOUTUBE UPLOAD ENDPOINT
+// ==========================================
+app.post('/api/youtube-upload', async (req, res) => {
+  const { videoUrl, title, googleAccessToken } = req.body;
+  if (!videoUrl || !title || !googleAccessToken) {
+    return res.status(400).json({ success: false, error: 'Missing videoUrl, title, or googleAccessToken' });
+  }
+
+  const scriptPath = path.join(__dirname, 'youtube_upload.py');
+  
+  // Safe argument escaping for CLI execution
+  const safeTitle = title.replace(/"/g, '\\"');
+  
+  const cmd = `python "${scriptPath}" "${videoUrl}" "${safeTitle}" "${googleAccessToken}"`;
+  
+  try {
+    const { success, stdout, stderr } = await runCmd(cmd);
+    if (!success) {
+      console.error(`[YouTube Upload Error]: ${stderr || stdout}`);
+      return res.status(500).json({ success: false, error: 'Upload process failed.' });
+    }
+    
+    try {
+      const result = JSON.parse(stdout);
+      return res.json(result);
+    } catch (e) {
+      return res.status(500).json({ success: false, error: 'Invalid JSON response from python script.' });
+    }
+  } catch (error) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // Start Server
 app.listen(PORT, () => {
   console.log(`==========================================`);

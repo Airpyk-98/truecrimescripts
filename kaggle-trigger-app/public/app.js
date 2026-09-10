@@ -1,7 +1,62 @@
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
+import { getAuth, signInWithPopup, GoogleAuthProvider } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js";
+
+const firebaseConfig = {
+  projectId: "epic-youtube-uploader-98",
+  appId: "1:187561662159:web:71e332f49b3c42b36809ba",
+  storageBucket: "epic-youtube-uploader-98.firebasestorage.app",
+  apiKey: "AIzaSyCexRsAZqhL_vK-sgmvtJmpuc5UpOhWRw4",
+  authDomain: "epic--uploader-98.firebaseapp.com",
+  messagingSenderId: "187561662159"
+};
+
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const googleProvider = new GoogleAuthProvider();
+googleProvider.addScope('https://www.googleapis.com/auth/youtube.upload');
+
 document.addEventListener('DOMContentLoaded', () => {
   // ═══════════════════════════════════════════════════════════
   // DOM ELEMENTS
   // ═══════════════════════════════════════════════════════════
+  const connectYoutubeBtn = document.getElementById('connect-youtube-btn');
+  const youtubeConnectedMsg = document.getElementById('youtube-connected-msg');
+  const youtubeErrorMsg = document.getElementById('youtube-error-msg');
+  const bulkUploadYtBtn = document.getElementById('bulk-upload-yt-btn');
+  let googleAccessToken = localStorage.getItem('google_access_token') || null;
+
+  // Handle Google OAuth
+  connectYoutubeBtn.addEventListener('click', () => {
+    youtubeErrorMsg.style.display = 'none';
+    connectYoutubeBtn.disabled = true;
+    connectYoutubeBtn.textContent = 'Connecting...';
+    
+    signInWithPopup(auth, googleProvider)
+      .then((result) => {
+        const credential = GoogleAuthProvider.credentialFromResult(result);
+        googleAccessToken = credential.accessToken;
+        localStorage.setItem('google_access_token', googleAccessToken);
+        
+        connectYoutubeBtn.style.display = 'none';
+        youtubeConnectedMsg.style.display = 'block';
+        youtubeConnectedMsg.textContent = `✓ Connected as ${result.user.displayName}`;
+      }).catch((error) => {
+        connectYoutubeBtn.disabled = false;
+        connectYoutubeBtn.innerHTML = '<span>🔗</span> Connect YouTube Account';
+        youtubeErrorMsg.style.display = 'block';
+        youtubeErrorMsg.textContent = `Error: ${error.message}`;
+      });
+  });
+
+  // Check initial Auth State
+  auth.onAuthStateChanged((user) => {
+    if (user && googleAccessToken) {
+      connectYoutubeBtn.style.display = 'none';
+      youtubeConnectedMsg.style.display = 'block';
+      youtubeConnectedMsg.textContent = `✓ Connected as ${user.displayName}`;
+    }
+  });
+
   const kaggleUsernameInput = document.getElementById('kaggle-username');
   const kaggleKeyInput = document.getElementById('kaggle-key');
   const hfTokenInput = document.getElementById('hf-token');
@@ -688,7 +743,10 @@ document.addEventListener('DOMContentLoaded', () => {
       titleEl.style.alignItems = 'flex-start';
       titleEl.style.gap = '8px';
       titleEl.innerHTML = `
-        <strong style="color: var(--text-primary); font-size: 13px; line-height: 1.4; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;">${title}</strong>
+        <div style="display: flex; align-items: flex-start; gap: 8px;">
+          <input type="checkbox" class="yt-bulk-checkbox" data-url="${urls[0]}" data-title="${title.replace(/"/g, '&quot;')}" checked style="margin-top: 4px; accent-color: #ef4444;" />
+          <strong style="color: var(--text-primary); font-size: 13px; line-height: 1.4; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;">${title}</strong>
+        </div>
         <span style="font-size: 11px; background: rgba(99, 102, 241, 0.15); color: #818cf8; padding: 2px 6px; border-radius: 4px; white-space: nowrap;">${aspectRatio}</span>
       `;
       card.appendChild(titleEl);
@@ -744,6 +802,47 @@ document.addEventListener('DOMContentLoaded', () => {
         vBtn.textContent = 'Web Preview ↗';
         btnGroup.appendChild(vBtn);
 
+        const ytBtn = document.createElement('button');
+        ytBtn.className = 'btn secondary-btn';
+        ytBtn.style.fontSize = '12px';
+        ytBtn.style.padding = '8px 10px';
+        ytBtn.style.background = 'rgba(239, 68, 68, 0.1)';
+        ytBtn.style.color = '#f87171';
+        ytBtn.textContent = 'YT Upload';
+        ytBtn.onclick = () => {
+          if (!googleAccessToken) {
+            alert("Please connect your YouTube account in the Credentials tab first.");
+            return;
+          }
+          ytBtn.textContent = 'Uploading...';
+          ytBtn.disabled = true;
+          const backend = backendUrlInput ? backendUrlInput.value.trim().replace(/\/$/, '') : '';
+          const targetUrl = backend ? `${backend}/api/youtube-upload` : '/api/youtube-upload';
+          fetch(targetUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ videoUrl: fullVideoUrl, title: title, googleAccessToken: googleAccessToken })
+          })
+          .then(res => res.json())
+          .then(data => {
+            if(data.success) {
+              ytBtn.textContent = 'Uploaded ✓';
+              ytBtn.style.color = '#4ade80';
+              ytBtn.onclick = () => window.open(`https://youtu.be/${data.videoId}`, '_blank');
+            } else {
+              alert("YouTube Upload Failed: " + data.error);
+              ytBtn.textContent = 'YT Upload';
+              ytBtn.disabled = false;
+            }
+          })
+          .catch(e => {
+            alert("Error: " + e.message);
+            ytBtn.textContent = 'YT Upload';
+            ytBtn.disabled = false;
+          });
+        };
+        btnGroup.appendChild(ytBtn);
+
         card.appendChild(btnGroup);
       });
 
@@ -762,6 +861,63 @@ document.addEventListener('DOMContentLoaded', () => {
         }).catch(() => alert('Failed to copy links.'));
       };
       downloadBtnsContainer.appendChild(cBtn);
+
+      const bulkYtBtn = document.createElement('button');
+      bulkYtBtn.className = 'btn primary-btn';
+      bulkYtBtn.style.background = '#ef4444';
+      bulkYtBtn.style.color = 'white';
+      bulkYtBtn.innerHTML = `<span>▶️ Upload Selected to YouTube</span>`;
+      bulkYtBtn.onclick = async () => {
+        if (!googleAccessToken) {
+          alert("Please connect your YouTube account in the Credentials tab first.");
+          return;
+        }
+        
+        const checkboxes = document.querySelectorAll('.yt-bulk-checkbox:checked');
+        if (checkboxes.length === 0) {
+          alert("No videos selected!");
+          return;
+        }
+
+        const btnSpan = bulkYtBtn.querySelector('span');
+        const origText = btnSpan.textContent;
+        btnSpan.textContent = `Uploading ${checkboxes.length} videos...`;
+        bulkYtBtn.disabled = true;
+
+        const backend = backendUrlInput ? backendUrlInput.value.trim().replace(/\/$/, '') : '';
+        const targetUrl = backend ? `${backend}/api/youtube-upload` : '/api/youtube-upload';
+        
+        let successCount = 0;
+        let failCount = 0;
+
+        for (const cb of checkboxes) {
+            const cbUrl = cb.dataset.url;
+            const cbTitle = cb.dataset.title;
+            const fullCbUrl = cbUrl.startsWith('http') ? cbUrl : (backend ? `${backend}${cbUrl}` : (window.location.origin + cbUrl));
+
+            try {
+                const res = await fetch(targetUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ videoUrl: fullCbUrl, title: cbTitle, googleAccessToken: googleAccessToken })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    successCount++;
+                    cb.checked = false; // uncheck on success
+                } else {
+                    failCount++;
+                }
+            } catch (e) {
+                failCount++;
+            }
+        }
+
+        btnSpan.textContent = origText;
+        bulkYtBtn.disabled = false;
+        alert(`Bulk Upload Complete.\nSuccessfully uploaded: ${successCount}\nFailed: ${failCount}`);
+      };
+      downloadBtnsContainer.appendChild(bulkYtBtn);
     }
 
     outputCard.style.display = 'block';
