@@ -11,13 +11,34 @@
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <div class="app-container">
+  <!-- Loading Screen (Shown briefly before Firebase initializes) -->
+  <div id="loading-screen" style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; background: #0a0a0a;">
+    <div class="spinner" style="border-color: #6d28d9; border-top-color: transparent; width: 40px; height: 40px; border-width: 4px;"></div>
+    <p style="color: #a0a0a0; margin-top: 20px;">Loading Drivon...</p>
+  </div>
+
+  <!-- Login Screen -->
+  <div id="login-screen" style="display: none; flex-direction: column; align-items: center; justify-content: center; height: 100vh; background: #0a0a0a;">
+    <h1 style="font-family: 'Space Grotesk', sans-serif; font-size: 2.5rem; margin-bottom: 10px;">Drivon</h1>
+    <p style="color: #a0a0a0; margin-bottom: 30px;">Sign in to access your video generator</p>
+    <button class="btn primary-btn" id="login-btn">
+      <span class="btn-text">Sign in with Google</span>
+    </button>
+  </div>
+
+  <div id="app-container" class="app-container" style="display: none;">
     <header class="app-header">
-      <div class="logo">
-        <span class="icon">🎬</span>
-        <h1>Kokoro Video Automation</h1>
+      <div style="display: flex; justify-content: space-between; align-items: flex-start; width: 100%;">
+        <div class="logo">
+          <span class="icon">🎬</span>
+          <h1>Kokoro Video Automation</h1>
+        </div>
+        <div class="user-profile" style="display: flex; align-items: center; gap: 12px; font-size: 14px;">
+          <span id="user-email" style="color: #a0a0a0;"></span>
+          <button id="logout-btn" class="btn secondary-btn" style="padding: 6px 12px; font-size: 12px; height: auto;">Sign Out</button>
+        </div>
       </div>
-      <p class="tagline">Hugging Face Space Control Center • Kaggle T4 Pipeline Trigger</p>
+      <p class="tagline" style="margin-top: 4px;">Hugging Face Space Control Center • Kaggle T4 Pipeline Trigger</p>
     </header>
 
     <!-- ═══ Tab Navigation ═══ -->
@@ -98,6 +119,24 @@
                 <label for="backend-url">Backend API URL <span class="optional">(Optional)</span></label>
                 <input type="text" id="backend-url" value="" placeholder="e.g., https://username-space.hf.space">
               </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- YouTube Upload Defaults -->
+        <div class="card glass-card">
+          <div class="card-header">
+            <span class="badge-icon">🎥</span>
+            <h2>YouTube Upload Defaults</h2>
+          </div>
+          <div class="card-body">
+            <div class="input-group" style="margin-bottom: 16px;">
+              <label for="yt-default-desc">Default Description <span class="optional">(Optional)</span></label>
+              <textarea id="yt-default-desc" rows="4" placeholder="Description template to use when uploading to YouTube..."></textarea>
+            </div>
+            <div class="input-group">
+              <label for="yt-default-tags">Default Tags <span class="optional">(Optional)</span></label>
+              <input type="text" id="yt-default-tags" placeholder="e.g., truecrime, mystery, documentary (comma separated)">
             </div>
           </div>
         </div>
@@ -191,7 +230,16 @@
                   <label for="titles-input">Paste Titles (One per line)</label>
                   <textarea id="titles-input" rows="6" placeholder="The Housing Wealth Paradox&#10;The Penny Melting Arbitrage&#10;..." style="width: 100%; padding: 12px; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.1); background: rgba(0, 0, 0, 0.2); color: white; resize: vertical; font-family: inherit; font-size: 14px;"></textarea>
                 </div>
-                <p class="helper-small" style="margin-top: 8px;">The AI will sequentially generate a full script for each title and render the videos one by one.</p>
+                
+                <div class="input-group checkbox-group" style="margin-top: 12px;">
+                  <input type="checkbox" id="manual-script-toggle">
+                  <label for="manual-script-toggle">Use Manual Scripts</label>
+                </div>
+                <div id="manual-scripts-container" style="display: none; margin-top: 16px; display: flex; flex-direction: column; gap: 12px;">
+                  <!-- Dynamic textareas will be generated here -->
+                </div>
+
+                <p class="helper-small" style="margin-top: 8px;">The AI will sequentially generate a full script for each title (or enrich your manual script) and render the videos one by one.</p>
               </div>
             </div>
 

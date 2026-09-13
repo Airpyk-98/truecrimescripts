@@ -8,8 +8,8 @@ RUN apt-get update && apt-get install -y \
 
 ENV PIP_BREAK_SYSTEM_PACKAGES=1
 
-# Install Kaggle CLI
-RUN pip3 install --no-cache-dir --upgrade kaggle
+# Install Kaggle CLI and other required python packages
+RUN pip3 install --no-cache-dir --upgrade kaggle huggingface-hub requests
 
 # Configure app directory permissions for the existing 'node' user (UID 1000)
 WORKDIR /app

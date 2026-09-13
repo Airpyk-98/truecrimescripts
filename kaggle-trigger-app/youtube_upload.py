@@ -9,22 +9,29 @@ def main():
         print(json.dumps({"success": False, "error": "Missing arguments"}))
         sys.exit(1)
 
-    video_url = sys.argv[1]
+    video_target = sys.argv[1]
     title = sys.argv[2]
     token = sys.argv[3]
+    description = sys.argv[4] if len(sys.argv) > 4 and sys.argv[4] else "Generated via Epic Youtube Uploader"
     
-    # Generate unique temp filename to avoid collision on bulk uploads
+    tags = ["shorts", "ai", "video"]
+    if len(sys.argv) > 5 and sys.argv[5]:
+        tags = [tag.strip() for tag in sys.argv[5].split(',') if tag.strip()]
+    
+    is_local = os.path.exists(video_target)
     temp_file = f"temp_yt_{uuid.uuid4().hex}.mp4"
+    file_to_upload = video_target if is_local else temp_file
 
     try:
-        # 1. Download video
-        r = requests.get(video_url, stream=True)
-        r.raise_for_status()
-        with open(temp_file, 'wb') as f:
-            for chunk in r.iter_content(chunk_size=1024*1024):
-                if chunk: f.write(chunk)
+        # 1. Download video if not local
+        if not is_local:
+            r = requests.get(video_target, stream=True)
+            r.raise_for_status()
+            with open(temp_file, 'wb') as f:
+                for chunk in r.iter_content(chunk_size=1024*1024):
+                    if chunk: f.write(chunk)
 
-        file_size = os.path.getsize(temp_file)
+        file_size = os.path.getsize(file_to_upload)
 
         # 2. Start Resumable Session
         headers = {
@@ -36,8 +43,8 @@ def main():
         body = {
             "snippet": {
                 "title": title,
-                "description": "Generated via Epic Youtube Uploader",
-                "tags": ["shorts", "ai", "video"],
+                "description": description,
+                "tags": tags,
                 "categoryId": "24" # Entertainment
             },
             "status": {
@@ -62,7 +69,7 @@ def main():
 
         # 3. Upload File Chunks (or full file)
         # requests will stream the file if passed a file object
-        with open(temp_file, "rb") as f:
+        with open(file_to_upload, "rb") as f:
             upload_resp = requests.put(upload_url, data=f, headers={"Content-Type": "video/mp4"})
 
         if upload_resp.status_code in [200, 201]:

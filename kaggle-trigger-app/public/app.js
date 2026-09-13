@@ -1,5 +1,5 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
-import { getAuth, signInWithPopup, GoogleAuthProvider } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js";
+import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js";
 
 const firebaseConfig = {
   projectId: "epic-youtube-uploader-98",
@@ -16,14 +16,57 @@ const googleProvider = new GoogleAuthProvider();
 googleProvider.addScope('https://www.googleapis.com/auth/youtube.upload');
 
 document.addEventListener('DOMContentLoaded', () => {
-  // ═══════════════════════════════════════════════════════════
-  // DOM ELEMENTS
-  // ═══════════════════════════════════════════════════════════
   const connectYoutubeBtn = document.getElementById('connect-youtube-btn');
   const youtubeConnectedMsg = document.getElementById('youtube-connected-msg');
   const youtubeErrorMsg = document.getElementById('youtube-error-msg');
   const bulkUploadYtBtn = document.getElementById('bulk-upload-yt-btn');
+  
   let googleAccessToken = localStorage.getItem('google_access_token') || null;
+
+  // --- AUTHENTICATION WALL ---
+  const loadingScreen = document.getElementById('loading-screen');
+  const loginScreen = document.getElementById('login-screen');
+  const appContainer = document.getElementById('app-container');
+  const mainLoginBtn = document.getElementById('login-btn');
+  const logoutBtn = document.getElementById('logout-btn');
+  const userEmailDisplay = document.getElementById('user-email');
+
+  // Sign out logic
+  logoutBtn.addEventListener('click', () => {
+    signOut(auth).catch(err => console.error("Sign out error", err));
+  });
+
+  // We reuse googleProvider to sign into the app, which also asks for YouTube scopes!
+  // This means logging into the app ALSO connects YouTube in one swoop.
+  mainLoginBtn.addEventListener('click', () => {
+    mainLoginBtn.textContent = 'Signing in...';
+    signInWithPopup(auth, googleProvider).then((result) => {
+      const credential = GoogleAuthProvider.credentialFromResult(result);
+      if (credential && credential.accessToken) {
+        googleAccessToken = credential.accessToken;
+        localStorage.setItem('google_access_token', googleAccessToken);
+      }
+    }).catch(err => {
+      console.error(err);
+      mainLoginBtn.textContent = 'Sign in with Google';
+      alert('Sign in failed: ' + err.message);
+    });
+  });
+
+  onAuthStateChanged(auth, (user) => {
+    // Hide loading screen immediately on first state resolve
+    loadingScreen.style.display = 'none';
+
+    if (user) {
+      loginScreen.style.display = 'none';
+      appContainer.style.display = 'block';
+      userEmailDisplay.textContent = user.email || 'User';
+    } else {
+      loginScreen.style.display = 'flex';
+      appContainer.style.display = 'none';
+      mainLoginBtn.textContent = 'Sign in with Google';
+    }
+  });
 
   // Handle Google OAuth
   connectYoutubeBtn.addEventListener('click', () => {
@@ -80,8 +123,60 @@ document.addEventListener('DOMContentLoaded', () => {
   const fetchModelsBtn = document.getElementById('fetch-models-btn');
   const aiModelGroup = document.getElementById('ai-model-group');
   const aiModelSelect = document.getElementById('ai-model');
+  const ytDefaultDescInput = document.getElementById('yt-default-desc');
+  const ytDefaultTagsInput = document.getElementById('yt-default-tags');
 
   const titlesInput = document.getElementById('titles-input');
+  const manualScriptToggle = document.getElementById('manual-script-toggle');
+  const manualScriptsContainer = document.getElementById('manual-scripts-container');
+
+  // Dynamic Manual Script Textareas
+  function renderManualScriptBoxes() {
+    if (!manualScriptToggle.checked) {
+      manualScriptsContainer.style.display = 'none';
+      manualScriptsContainer.innerHTML = '';
+      return;
+    }
+    
+    manualScriptsContainer.style.display = 'flex';
+    const rawTitles = titlesInput.value.trim();
+    const titlesArray = rawTitles ? rawTitles.split('\n').map(t => t.trim()).filter(t => t.length > 0) : [];
+    
+    // We want to reuse existing values if the user is typing, so we keep a map of existing scripts
+    const existingScripts = Array.from(manualScriptsContainer.querySelectorAll('textarea')).map(ta => ta.value);
+    
+    manualScriptsContainer.innerHTML = ''; // Clear container
+    
+    if (titlesArray.length === 0) {
+      manualScriptsContainer.innerHTML = '<p class="helper-small" style="color: #ef4444;">Please paste at least one title above first.</p>';
+      return;
+    }
+
+    titlesArray.forEach((title, index) => {
+      const wrapper = document.createElement('div');
+      wrapper.className = 'input-group';
+      
+      const label = document.createElement('label');
+      label.textContent = `Manual Script for: "${title}"`;
+      
+      const textarea = document.createElement('textarea');
+      textarea.rows = 4;
+      textarea.placeholder = "Enter script lines here (one sentence per line)...";
+      textarea.className = 'manual-script-input';
+      textarea.style.cssText = "width: 100%; padding: 12px; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.1); background: rgba(0, 0, 0, 0.2); color: white; resize: vertical; font-family: inherit; font-size: 14px;";
+      
+      if (existingScripts[index]) {
+        textarea.value = existingScripts[index];
+      }
+      
+      wrapper.appendChild(label);
+      wrapper.appendChild(textarea);
+      manualScriptsContainer.appendChild(wrapper);
+    });
+  }
+
+  manualScriptToggle.addEventListener('change', renderManualScriptBoxes);
+  titlesInput.addEventListener('input', renderManualScriptBoxes);
 
   const aspectRatioSelect = document.getElementById('aspect-ratio');
   const ttsEngineSelect = document.getElementById('tts-engine');
@@ -177,6 +272,8 @@ document.addEventListener('DOMContentLoaded', () => {
     hfTokenInput.value = s('hf_token');
     backendUrlInput.value = s('backend_url');
     zImageKeyInput.value = s('z_image_key');
+    ytDefaultDescInput.value = s('yt_default_desc');
+    ytDefaultTagsInput.value = s('yt_default_tags');
 
     aiBaseUrlInput.value = s('ai_base_url') || 'https://integrate.api.nvidia.com/v1';
     aiApiKeyInput.value = s('ai_api_key');
@@ -211,6 +308,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
     localStorage.setItem('ai_base_url', aiBaseUrlInput.value.trim());
     localStorage.setItem('ai_api_key', aiApiKeyInput.value.trim());
+    if (aiModelSelect.value) {
+      localStorage.setItem('ai_model_preference', aiModelSelect.value);
+    }
+    
+    localStorage.setItem('yt_default_desc', ytDefaultDescInput.value);
+    localStorage.setItem('yt_default_tags', ytDefaultTagsInput.value.trim());
 
     // Sync to server
     fetch(getApiUrl('/api/setup-local-kaggle'), {
@@ -337,12 +440,18 @@ document.addEventListener('DOMContentLoaded', () => {
       
       aiModelSelect.innerHTML = '';
       if (data.data && Array.isArray(data.data)) {
+        const savedPref = localStorage.getItem('ai_model_preference');
         data.data.forEach(model => {
           const option = document.createElement('option');
           option.value = model.id;
           option.textContent = model.id;
-          if (model.id.toLowerCase().includes('minimax') || model.id.toLowerCase().includes('m3')) {
-            option.selected = true;
+          
+          if (savedPref) {
+            if (model.id === savedPref) option.selected = true;
+          } else {
+            if (model.id.toLowerCase().includes('minimax') || model.id.toLowerCase().includes('m3')) {
+              option.selected = true;
+            }
           }
           aiModelSelect.appendChild(option);
         });
@@ -409,6 +518,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const formData = new FormData();
     formData.append('titles', JSON.stringify(titlesArray));
+    
+    if (manualScriptToggle.checked) {
+      const manualScriptInputs = Array.from(manualScriptsContainer.querySelectorAll('.manual-script-input'));
+      const manualScriptsArray = manualScriptInputs.map(ta => ta.value);
+      formData.append('manual_scripts', JSON.stringify(manualScriptsArray));
+    }
     formData.append('ai_base_url', aiBaseUrl);
     formData.append('ai_api_key', aiApiKey);
     formData.append('ai_model', aiModel);
@@ -821,7 +936,7 @@ document.addEventListener('DOMContentLoaded', () => {
           fetch(targetUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ videoUrl: fullVideoUrl, title: title, googleAccessToken: googleAccessToken })
+            body: JSON.stringify({ videoUrl: fullVideoUrl, title: title, googleAccessToken: googleAccessToken, description: localStorage.getItem('yt_default_desc') || '', tags: localStorage.getItem('yt_default_tags') || '' })
           })
           .then(res => res.json())
           .then(data => {
@@ -899,7 +1014,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const res = await fetch(targetUrl, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ videoUrl: fullCbUrl, title: cbTitle, googleAccessToken: googleAccessToken })
+                    body: JSON.stringify({ videoUrl: fullCbUrl, title: cbTitle, googleAccessToken: googleAccessToken, description: localStorage.getItem('yt_default_desc') || '', tags: localStorage.getItem('yt_default_tags') || '' })
                 });
                 const data = await res.json();
                 if (data.success) {
@@ -976,6 +1091,7 @@ document.addEventListener('DOMContentLoaded', () => {
           <div class="hist-actions" style="display: flex; gap: 6px; align-items: center;">
             ${fullUrls.map((fu) => `<a href="${fu}" target="_blank" class="btn secondary-btn" style="padding: 4px 10px; font-size: 12px;">Web Preview ↗</a>`).join('')}
             <button class="btn secondary-btn hist-copy-btn" data-url="${fullUrls.join('\n')}" style="padding: 4px 8px; font-size: 12px;">Copy</button>
+            <button class="btn primary-btn hist-yt-btn" data-url="${fullUrls[0]}" data-title="${titleDisplay.replace(/"/g, '&quot;')}" style="padding: 4px 8px; font-size: 12px; background: #ef4444; color: white;">YT Upload</button>
           </div>`;
       }
 
@@ -1001,6 +1117,41 @@ document.addEventListener('DOMContentLoaded', () => {
           btn.textContent = 'Copied!';
           setTimeout(() => btn.textContent = orig, 2000);
         });
+      });
+    });
+
+    // Bind YouTube upload buttons
+    document.querySelectorAll('.hist-yt-btn').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        if (!googleAccessToken) {
+          alert("Please connect your YouTube account in the Credentials tab first.");
+          return;
+        }
+        const backend = backendUrlInput ? backendUrlInput.value.trim().replace(/\/$/, '') : '';
+        const targetUrl = backend ? `${backend}/api/youtube-upload` : '/api/youtube-upload';
+        
+        btn.disabled = true;
+        const origText = btn.textContent;
+        btn.textContent = 'Uploading...';
+        try {
+            const res = await fetch(targetUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ videoUrl: btn.dataset.url, title: btn.dataset.title, googleAccessToken: googleAccessToken, description: localStorage.getItem('yt_default_desc') || '', tags: localStorage.getItem('yt_default_tags') || '' })
+            });
+            const data = await res.json();
+            if (data.success) {
+                btn.textContent = 'Uploaded \u2714';
+            } else {
+                alert("YouTube Upload Failed: " + data.error);
+                btn.textContent = origText;
+                btn.disabled = false;
+            }
+        } catch (e) {
+            alert("Upload request failed.");
+            btn.textContent = origText;
+            btn.disabled = false;
+        }
       });
     });
   };

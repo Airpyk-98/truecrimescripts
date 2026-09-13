@@ -112,14 +112,18 @@ app.post('/api/test-kaggle', async (req, res) => {
 
   try {
     // Write temporary kaggle.json
-    fs.writeFileSync(path.join(tempDir, 'kaggle.json'), JSON.stringify({
+    const kPath = path.join(tempDir, 'kaggle.json');
+    fs.writeFileSync(kPath, JSON.stringify({
       username: finalUsername,
       key: finalKey
     }, null, 2), 'utf8');
+    try { fs.chmodSync(kPath, 0o600); } catch(e){}
 
     // Support new KGAT token format
     if (finalKey.startsWith('KGAT_')) {
-      fs.writeFileSync(path.join(tempDir, 'access_token'), finalKey.trim(), 'utf8');
+      const atPath = path.join(tempDir, 'access_token');
+      fs.writeFileSync(atPath, finalKey.trim(), 'utf8');
+      try { fs.chmodSync(atPath, 0o600); } catch(e){}
     }
 
     const env = {
@@ -178,6 +182,7 @@ app.post('/api/models', async (req, res) => {
 app.post('/api/trigger-titles', upload.none(), async (req, res) => {
   const {
     titles,
+    manual_scripts,
     ai_base_url,
     ai_api_key,
     ai_model,
@@ -203,8 +208,12 @@ app.post('/api/trigger-titles', upload.none(), async (req, res) => {
   } = req.body;
 
   let titleList = [];
+  let scriptList = [];
   try {
     titleList = JSON.parse(titles);
+    if (manual_scripts) {
+      scriptList = JSON.parse(manual_scripts);
+    }
   } catch (e) {
     return res.status(400).json({ error: 'Titles must be a valid JSON array.' });
   }
@@ -259,7 +268,7 @@ app.post('/api/trigger-titles', upload.none(), async (req, res) => {
   res.json({ jobId, success: true, message: 'Batch run initiated.' });
 
   // Process sequentially in background
-  processBatchInBackground(jobId, titleList, req.body, finalUsername, finalKey);
+  processBatchInBackground(jobId, titleList, scriptList, req.body, finalUsername, finalKey);
 });
 
 const SYSTEM_PROMPT = `SYSTEM PROMPT: SHORTS CSV SCRIPT & IMAGE PROMPT GENERATOR
@@ -320,17 +329,32 @@ async function generateCsvWithAI(title, ai_base_url, ai_api_key, ai_model) {
       { role: 'system', content: SYSTEM_PROMPT },
       { role: 'user', content: `TITLE / CONCEPT: ${title}\n\nPlease generate the CSV script.` }
     ],
-    temperature: 0.7
+    temperature: 0.7,
+    max_tokens: 4096
   };
 
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${ai_api_key}`,
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify(payload)
-  });
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 360000); // 6 minute timeout
+
+  let response;
+  try {
+    response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${ai_api_key}`,
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'User-Agent': 'Drivon-Kaggle-Trigger-App/1.0'
+      },
+      body: JSON.stringify(payload),
+      signal: controller.signal
+    });
+  } catch (err) {
+    clearTimeout(timeoutId);
+    throw new Error(`Connection to ${url} failed: ${err.message}`);
+  }
+  
+  clearTimeout(timeoutId);
 
   if (!response.ok) {
     const txt = await response.text();
@@ -344,8 +368,97 @@ async function generateCsvWithAI(title, ai_base_url, ai_api_key, ai_model) {
   return content;
 }
 
+const ENRICH_SCRIPT_PROMPT = `SYSTEM PROMPT: MANUAL SCRIPT ENRICHMENT
+You are an expert AI Video Producer and Prompt Engineer.
+You will be given a complete script, provided line-by-line.
+Your sole task is to take these EXACT lines and format them into a precise CSV, generating ONLY the corresponding 'image prompt' and 'video prompt' for each line.
+
+You must strictly output ONLY the CSV data. Do not include any introductory text, pleasantries, or markdown formatting outside of the CSV. The response must start immediately with the column headers.
+
+1. CSV STRUCTURE & HEADERS
+Your output must be a valid, comma-separated CSV. You must use these exact headers (case-sensitive and spelled exactly as shown):
+
+"Serial number","image prompt","video prompt","voice over prompt"
+
+Every value in every row must be enclosed in double quotes ("). Any double quotes occurring inside the prompts must be escaped as double-double quotes ("").
+
+2. VOICE OVER PROMPT RULES
+- You MUST copy the exact line provided by the user for the "voice over prompt" column. Do not change the wording.
+- One row per line provided by the user.
+
+3. IMAGE PROMPT RULES (THE VISUALS)
+- For every sentence, generate a hyper-detailed, professional image generation prompt. 
+- Use the following exact aesthetic: "Dimensional paper cut-out art, textured craft paper diorama, distinct drop shadows between crisp paper edges, tactile stop-motion aesthetic, cinematic studio lighting, rich colors."
+- Describe physical, concrete objects made of paper.
+- Never depict real identifiable people directly. Use symbolic papercraft figures.
+- End every image prompt with: "Negative prompt: realistic photography, 3D CGI render, digital drawing, smooth flat vector, blurry, distorted, multi-layered"
+
+4. VIDEO PROMPT RULES (THE MOTION)
+- Create a distinct 5-second video motion prompt for every single scene.
+- Keep the motion subtle but engaging. Use camera movements like "slow pan left", "slow zoom in", "subtle tilt up".
+- Keep characters and elements relatively static; rely on the camera motion.
+- Write it compactly.`;
+
+async function generateEnrichedCsvWithAI(title, scriptText, ai_base_url, ai_api_key, ai_model) {
+  let baseUrl = ai_base_url.trim();
+  if (!baseUrl.endsWith('/v1')) {
+    if (baseUrl.endsWith('/')) baseUrl = baseUrl.slice(0, -1);
+    if (!baseUrl.endsWith('/v1') && !baseUrl.includes('v1')) {
+        baseUrl = baseUrl + '/v1';
+    }
+  }
+  const url = `${baseUrl}/chat/completions`;
+  
+  const payload = {
+    model: ai_model,
+    messages: [
+      { role: 'system', content: ENRICH_SCRIPT_PROMPT },
+      { role: 'user', content: `TITLE / CONCEPT: ${title}\n\nMANUAL SCRIPT:\n${scriptText}\n\nPlease generate the CSV.` }
+    ],
+    temperature: 0.2,
+    max_tokens: 4096
+  };
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 360000); // 6 minute timeout
+
+  let response;
+  try {
+    response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${ai_api_key}`,
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'User-Agent': 'Drivon-Kaggle-Trigger-App/1.0'
+      },
+      body: JSON.stringify(payload),
+      signal: controller.signal
+    });
+  } catch (err) {
+    clearTimeout(timeoutId);
+    throw new Error(`Connection to ${url} failed: ${err.message}`);
+  }
+  
+  clearTimeout(timeoutId);
+
+  if (!response.ok) {
+    const txt = await response.text();
+    throw new Error(`AI API Error (${response.status}): ${txt}`);
+  }
+
+  const data = await response.json();
+  let csvText = data.choices[0].message.content.trim();
+  
+  if (csvText.startsWith('```csv')) csvText = csvText.substring(6);
+  else if (csvText.startsWith('```')) csvText = csvText.substring(3);
+  if (csvText.endsWith('```')) csvText = csvText.substring(0, csvText.length - 3);
+  
+  return csvText.trim();
+}
+
 // Background batch processing
-async function processBatchInBackground(jobId, titles, config, finalUsername, finalKey) {
+async function processBatchInBackground(jobId, titles, manualScripts, config, finalUsername, finalKey) {
   const job = jobs[jobId];
   
   for (let i = 0; i < titles.length; i++) {
@@ -353,14 +466,24 @@ async function processBatchInBackground(jobId, titles, config, finalUsername, fi
     if (!title) continue;
     
     job.status = 'running';
-    job.log.push(`[INFO] [Video ${i+1}/${titles.length}] Generating AI script for: ${title}`);
     
     let csvData;
     try {
-      csvData = await generateCsvWithAI(title, config.ai_base_url, config.ai_api_key, config.ai_model);
+      if (!config.ai_base_url.startsWith('http')) {
+        config.ai_base_url = 'https://' + config.ai_base_url;
+      }
+      if (manualScripts && manualScripts[i] && manualScripts[i].trim().length > 0) {
+        job.log.push(`[INFO] [Video ${i+1}/${titles.length}] Enriching MANUAL script for: ${title}`);
+        csvData = await generateEnrichedCsvWithAI(title, manualScripts[i].trim(), config.ai_base_url, config.ai_api_key, config.ai_model);
+      } else {
+        job.log.push(`[INFO] [Video ${i+1}/${titles.length}] Generating full AI script for: ${title}`);
+        csvData = await generateCsvWithAI(title, config.ai_base_url, config.ai_api_key, config.ai_model);
+      }
       job.log.push(`[SUCCESS] CSV Script generated for ${title}.`);
     } catch (e) {
-      job.log.push(`[ERROR] Failed to generate script for ${title}: ${e.message}`);
+      let errorMsg = e.message;
+      if (e.cause) errorMsg += ` (Cause: ${e.cause.message || e.cause})`;
+      job.log.push(`[ERROR] Failed to generate script for ${title}: ${errorMsg}`);
       continue; // Skip to next title
     }
 
@@ -388,22 +511,23 @@ async function processBatchInBackground(jobId, titles, config, finalUsername, fi
             download_urls: JSON.stringify(absoluteUrls)
           }).toString();
           
-          await fetch(`https://airpyk98-youtube-n8n.hf.space/webhook/drivon-yt?${queryParams}`, {
-            method: 'GET'
-          });
-          job.log.push(`[SUCCESS] Webhook dispatched to n8n for: ${title}`);
+          await fetch(`https://airpyk98-youtube-n8n.hf.space/webhook/drivon-yt?${queryParams}`);
+          job.log.push(`[SUCCESS] Webhook delivered via GET for ${title}`);
         } catch (we) {
-          job.log.push(`[WARN] Webhook GET request error for ${title}: ${we.message}`);
+          job.log.push(`[ERROR] Webhook failed (GET) for ${title}: ${we.message}`);
         }
 
         // 2. Also send POST request as backup
         try {
-          await fetch("https://airpyk98-youtube-n8n.hf.space/webhook/drivon-yt", {
+          await fetch('https://airpyk98-youtube-n8n.hf.space/webhook/drivon-yt', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(webhookPayload)
           });
-        } catch (we) {}
+          job.log.push(`[SUCCESS] Webhook delivered via POST for ${title}`);
+        } catch (we) {
+          job.log.push(`[ERROR] Webhook failed (POST) for ${title}: ${we.message}`);
+        }
 
         job.completedVideos.push({
           title: title,
@@ -863,9 +987,14 @@ async function runKagglePipelineSync(job, title, csvBase64, config, finalUsernam
   const safeTitle = title.replace(/[^a-zA-Z0-9_-]/g, '_').substring(0, 50);
 
   // Write credentials
-  fs.writeFileSync(path.join(tempDir, 'kaggle.json'), JSON.stringify({ username: finalUsername, key: finalKey }, null, 2), 'utf8');
+  const kaggleJsonPath = path.join(tempDir, 'kaggle.json');
+  fs.writeFileSync(kaggleJsonPath, JSON.stringify({ username: finalUsername, key: finalKey }, null, 2), 'utf8');
+  try { fs.chmodSync(kaggleJsonPath, 0o600); } catch(e){}
+  
   if (finalKey.startsWith('KGAT_')) {
-    fs.writeFileSync(path.join(tempDir, 'access_token'), finalKey.trim(), 'utf8');
+    const atPath = path.join(tempDir, 'access_token');
+    fs.writeFileSync(atPath, finalKey.trim(), 'utf8');
+    try { fs.chmodSync(atPath, 0o600); } catch(e){}
   }
 
   const env = {
@@ -999,7 +1128,7 @@ async function runKagglePipelineSync(job, title, csvBase64, config, finalUsernam
     try {
       const hfToken = config.hf_token_override || process.env.HF_TOKEN || '';
       const repoId = "epic98/truecrime-videos"; // Target Dataset Repository
-      const uploadCmd = `python upload_to_dataset.py "${destPath}" "${repoId}" "${hfToken}"`;
+      const uploadCmd = `python3 upload_to_dataset.py "${destPath}" "${repoId}" "${hfToken}"`;
       job.log.push(`[INFO] Uploading ${destFilename} to HF Dataset ${repoId}...`);
       const upRes = await runCmd(uploadCmd, env);
       if (upRes.success) {
@@ -1371,23 +1500,49 @@ function cleanupJobTemp(jobId) {
 // YOUTUBE UPLOAD ENDPOINT
 // ==========================================
 app.post('/api/youtube-upload', async (req, res) => {
-  const { videoUrl, title, googleAccessToken } = req.body;
+  const { videoUrl, title, googleAccessToken, description, tags } = req.body;
   if (!videoUrl || !title || !googleAccessToken) {
     return res.status(400).json({ success: false, error: 'Missing videoUrl, title, or googleAccessToken' });
+  }
+
+  let targetUrl = videoUrl;
+  
+  // If the video URL is from our own server or dataset, map it to the physical file if it exists!
+  try {
+    const urlObj = new URL(videoUrl, 'http://localhost');
+    let filename = '';
+    
+    if (urlObj.pathname.startsWith('/outputs/')) {
+       filename = decodeURIComponent(urlObj.pathname.replace('/outputs/', ''));
+    } else if (urlObj.hostname === 'huggingface.co' && urlObj.pathname.includes('/resolve/main/')) {
+       const parts = urlObj.pathname.split('/');
+       filename = decodeURIComponent(parts[parts.length - 1]);
+    }
+
+    if (filename) {
+       const localPath = path.join(__dirname, 'public', 'outputs', filename);
+       if (fs.existsSync(localPath)) {
+           targetUrl = localPath;
+       }
+    }
+  } catch (e) {
+    console.error("[WARN] Failed to parse video URL:", e.message);
   }
 
   const scriptPath = path.join(__dirname, 'youtube_upload.py');
   
   // Safe argument escaping for CLI execution
   const safeTitle = title.replace(/"/g, '\\"');
+  const safeDesc = (description || '').replace(/"/g, '\\"');
+  const safeTags = (tags || '').replace(/"/g, '\\"');
   
-  const cmd = `python "${scriptPath}" "${videoUrl}" "${safeTitle}" "${googleAccessToken}"`;
+  const cmd = `python3 "${scriptPath}" "${targetUrl}" "${safeTitle}" "${googleAccessToken}" "${safeDesc}" "${safeTags}"`;
   
   try {
     const { success, stdout, stderr } = await runCmd(cmd);
     if (!success) {
       console.error(`[YouTube Upload Error]: ${stderr || stdout}`);
-      return res.status(500).json({ success: false, error: 'Upload process failed.' });
+      return res.status(500).json({ success: false, error: `Upload process failed: ${stderr || stdout || 'Unknown error'}` });
     }
     
     try {
